@@ -1,0 +1,15 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+- You can @ files here
+- You can use markdown but dont have to
+When writing code, always prefer working solutions. If a feature is already working, avoid refactoring or changing it unless I specifically ask. When asked to fix bugs or add features, preserve all existing working logic. Keep components modular and clean. Use Firebase (v9 modular), React Router, and Tailwind CSS. Don't remove or change working flows unless explicitly instructed.
+
+Always explain your reasoning briefly when doing non-trivial changes.  
+Use modern React (functional components, hooks).  
+Support both coach and client flows separately.  
