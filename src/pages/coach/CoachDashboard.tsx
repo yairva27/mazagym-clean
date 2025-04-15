@@ -1,208 +1,226 @@
-import React, { useState, useEffect } from 'react';
+console.log('=== CoachDashboard File Loaded ===');
+
+import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Layout } from '../../components/layout/Layout';
 import { useAuth } from '../../contexts/AuthContext';
-import { collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../config/firebase';
-import { UserData } from '../../contexts/AuthContext';
-import { WorkoutPlan } from '../../types/workout';
-import { Link } from 'react-router-dom';
+import { UserData } from '../../types/user';
 
-interface TraineeData extends UserData {
+interface TraineeWithWorkout extends UserData {
   lastWorkoutUpdate?: Date;
   workoutPlanId?: string;
 }
 
 export const CoachDashboard: React.FC = () => {
   const { userData } = useAuth();
-  const [trainees, setTrainees] = useState<TraineeData[]>([]);
+  const [trainees, setTrainees] = useState<TraineeWithWorkout[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchTrainees = async () => {
-      if (!userData || userData.role !== 'coach') {
-        setLoading(false);
-        return;
-      }
-
       try {
-        setLoading(true);
-        setError(null);
+        // Validate auth data
+        console.log('=== Auth Data Validation ===');
+        console.log('Current userData:', {
+          uid: userData?.uid,
+          role: userData?.role,
+          exists: !!userData
+        });
 
-        // Query users collection for trainees with this coach's invitation code
+        if (!userData?.uid) {
+          console.error('No userData.uid available');
+          setError('שגיאה בטעינת נתוני משתמש');
+          setLoading(false);
+          return;
+        }
+
+        // Build and execute query
+        console.log('=== Query Execution ===');
+        console.log('Building query with params:', {
+          coachId: userData.uid,
+          role: 'trainee'
+        });
+
         const usersRef = collection(db, 'users');
-        const q = query(
+        console.log('Collection reference:', usersRef.path);
+
+        const traineesQuery = query(
           usersRef,
-          where('role', '==', 'trainee'),
-          where('coachId', '==', userData.uid)
+          where('coachId', '==', userData.uid),
+          where('role', '==', 'trainee')
         );
 
-        const querySnapshot = await getDocs(q);
-        
+        console.log('Executing query...');
+        const querySnapshot = await getDocs(traineesQuery);
+
+        // Log raw query results
+        console.log('=== Raw Query Results ===');
+        console.log('QuerySnapshot:', {
+          empty: querySnapshot.empty,
+          size: querySnapshot.size,
+          docs: querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            exists: doc.exists(),
+            data: doc.data()
+          }))
+        });
+
         if (querySnapshot.empty) {
+          console.log('Query returned empty result');
           setTrainees([]);
-        } else {
-          // Get all trainees
-          const traineesData: TraineeData[] = [];
-          
-          // For each trainee, get their active workout plan
-          for (const doc of querySnapshot.docs) {
-            const traineeData = doc.data() as TraineeData;
-            
-            // Query workout plans for this trainee
-            const workoutPlansRef = collection(db, 'workoutPlans');
-            const workoutQuery = query(
-              workoutPlansRef,
-              where('traineeId', '==', traineeData.uid),
-              where('isActive', '==', true),
-              orderBy('updatedAt', 'desc')
-            );
-            
-            const workoutSnapshot = await getDocs(workoutQuery);
-            
-            if (!workoutSnapshot.empty) {
-              const workoutPlan = workoutSnapshot.docs[0].data() as WorkoutPlan;
-              traineeData.lastWorkoutUpdate = workoutPlan.updatedAt instanceof Timestamp 
-                ? workoutPlan.updatedAt.toDate() 
-                : new Date(workoutPlan.updatedAt);
-              traineeData.workoutPlanId = workoutSnapshot.docs[0].id;
-            }
-            
-            traineesData.push(traineeData);
-          }
-          
-          setTrainees(traineesData);
+          setLoading(false);
+          return;
         }
+
+        // Process and validate each trainee document
+        console.log('=== Processing Trainees ===');
+        const processedTrainees = querySnapshot.docs.map(doc => {
+          const data = doc.data();
+          console.log('Processing document:', {
+            id: doc.id,
+            rawData: data
+          });
+
+          const trainee = {
+            uid: doc.id,
+            email: data.email || '',
+            fullName: data.fullName || '',
+            role: data.role || 'trainee',
+            coachId: data.coachId || '',
+            phoneNumber: data.phoneNumber || data.phone || '',
+            avatar: data.avatar || '',
+            createdAt: data.createdAt?.toDate() || new Date(),
+            updatedAt: data.updatedAt?.toDate() || new Date()
+          } as TraineeWithWorkout;
+
+          console.log('Processed trainee:', trainee);
+          return trainee;
+        });
+
+        console.log('=== Final State Update ===');
+        console.log('Setting trainees state with:', processedTrainees);
+        setTrainees(processedTrainees);
+
       } catch (err) {
-        console.error('Error fetching trainees:', err);
-        setError('שגיאה בטעינת המתאמנים. אנא נסה שוב מאוחר יותר.');
+        console.error('Error in fetchTrainees:', err);
+        setError('שגיאה בטעינת המתאמנים');
       } finally {
         setLoading(false);
       }
     };
 
     fetchTrainees();
-  }, [userData]);
+  }, [userData?.uid]);
 
-  const formatDate = (date?: Date) => {
-    if (!date) return 'מעולם';
-    return new Intl.DateTimeFormat('he-IL', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(date);
-  };
+  // Debug render state
+  console.log('=== Render State ===', {
+    loading,
+    error,
+    traineesCount: trainees.length,
+    trainees: trainees
+  });
+
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex justify-center items-center h-[calc(100vh-64px)]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
+            <p className="mt-4">טוען מתאמנים...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" dir="rtl">
-        <div className="py-6">
-          <h1 className="text-2xl font-semibold text-gray-900">לוח בקרה למאמן</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            ניהול המתאמנים ותוכניות האימון שלהם
-          </p>
+      <div className="container mx-auto px-4 py-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+          <h1 className="text-2xl font-bold">לוח בקרה</h1>
+          {userData?.invitationCode && (
+            <div className="bg-white shadow rounded-lg p-4 w-full sm:w-auto">
+              <div className="text-sm">
+                <span className="font-semibold ml-2">קוד הזמנה למתאמנים:</span>
+                <span className="bg-blue-50 px-3 py-1 rounded font-mono text-blue-700">
+                  {userData.invitationCode}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Trainees List */}
-        <div className="bg-white shadow rounded-lg">
-          <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
-            <h2 className="text-lg font-medium text-gray-900">מתאמנים שלי</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              צפייה וניהול תוכניות האימון של המתאמנים
-            </p>
+        {error ? (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+            <p className="text-red-700">{error}</p>
           </div>
-          
-          <div className="px-4 py-5 sm:p-6">
-            {loading ? (
-              <div className="flex justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-              </div>
-            ) : error ? (
-              <div className="bg-red-50 p-4 rounded-md">
-                <p className="text-sm text-red-700">{error}</p>
-              </div>
-            ) : trainees.length === 0 ? (
-              <div className="text-center py-12">
-                <svg
-                  className="mx-auto h-12 w-12 text-gray-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  aria-hidden="true"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                  />
-                </svg>
-                <h3 className="mt-2 text-sm font-medium text-gray-900">אין מתאמנים עדיין</h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  שתף את קוד ההזמנה שלך עם מתאמנים כדי להתחיל.
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                {trainees.map((trainee) => (
-                  <div
-                    key={trainee.uid}
-                    className="bg-white overflow-hidden shadow rounded-lg border border-gray-200"
-                  >
-                    <div className="px-4 py-5 sm:p-6">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0">
-                          <img
-                            className="h-12 w-12 rounded-full"
-                            src={trainee.avatar || '/assets/avatars/default.png'}
-                            alt={trainee.fullName}
-                          />
-                        </div>
-                        <div className="mr-4">
-                          <h3 className="text-lg font-medium text-gray-900">{trainee.fullName}</h3>
-                          <p className="text-sm text-gray-500">{trainee.email}</p>
-                        </div>
-                      </div>
-                      <div className="mt-4">
-                        <p className="text-sm text-gray-500">
-                          עדכון אחרון: {formatDate(trainee.lastWorkoutUpdate)}
-                        </p>
-                      </div>
-                      <div className="mt-5 flex space-x-3 space-x-reverse">
-                        {trainee.workoutPlanId ? (
-                          <>
-                            <Link
-                              to={`/coach/trainee/${trainee.uid}/view`}
-                              className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                            >
-                              צפה בתוכנית אימון
-                            </Link>
-                            <Link
-                              to={`/coach/trainee/${trainee.uid}/edit`}
-                              className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                            >
-                              ערוך תוכנית אימון
-                            </Link>
-                          </>
-                        ) : (
-                          <Link
-                            to={`/coach/trainee/${trainee.uid}/edit`}
-                            className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                          >
-                            צור תוכנית אימון
-                          </Link>
-                        )}
-                      </div>
+        ) : trainees.length === 0 ? (
+          <div className="bg-white shadow rounded-lg p-8 text-center">
+            <div className="max-w-md mx-auto">
+              <h3 className="text-xl font-medium mb-4">אין לך מתאמנים כרגע</h3>
+              <p className="text-gray-600 mb-6">
+                שתף את קוד ההזמנה שלך כדי שמתאמנים יוכלו להירשם למערכת
+              </p>
+              {userData?.invitationCode && (
+                <div className="bg-blue-50 p-4 rounded-lg inline-block">
+                  <p className="text-sm text-gray-600 mb-2">הקוד שלך:</p>
+                  <span className="font-mono text-lg text-blue-700 font-semibold">
+                    {userData.invitationCode}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {trainees.map((trainee) => (
+              <div key={trainee.uid} className="bg-white shadow rounded-lg overflow-hidden">
+                <div className="p-6">
+                  <div className="flex items-center mb-6">
+                    <img
+                      src={trainee.avatar || '/assets/avatars/default.png'}
+                      alt={trainee.fullName}
+                      className="w-16 h-16 rounded-full mr-4 object-cover border-2 border-gray-100"
+                    />
+                    <div>
+                      <h3 className="font-medium text-lg">{trainee.fullName}</h3>
+                      <p className="text-gray-600">{trainee.email}</p>
+                      {trainee.phoneNumber && (
+                        <p className="text-gray-600 text-sm">{trainee.phoneNumber}</p>
+                      )}
                     </div>
                   </div>
-                ))}
+                  <div className="space-y-3">
+                    <Link
+                      to={`/coach/trainee/${trainee.uid}/workout`}
+                      className="block w-full text-center bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      צפה בתוכנית אימון
+                    </Link>
+                    <Link
+                      to={`/coach/trainee/${trainee.uid}/create-plan`}
+                      className="block w-full text-center bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors"
+                    >
+                      צור תוכנית אימון חדשה
+                    </Link>
+                    <Link
+                      to={`/coach/trainee/${trainee.uid}/edit-plan`}
+                      className="block w-full text-center bg-yellow-600 text-white py-2 px-4 rounded-lg hover:bg-yellow-700 transition-colors"
+                    >
+                      ערוך תוכנית אימון
+                    </Link>
+                  </div>
+                </div>
               </div>
-            )}
+            ))}
           </div>
-        </div>
+        )}
       </div>
     </Layout>
   );
-}; 
+};
+
+export default CoachDashboard; 

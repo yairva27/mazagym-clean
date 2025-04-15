@@ -10,14 +10,12 @@ import Settings from './pages/settings/Settings';
 import AvatarSettings from './pages/settings/AvatarSettings';
 import CoachInfo from './pages/trainee/CoachInfo';
 import { InvitationCodePage } from './pages/coach/InvitationCodePage';
+import { CoachDashboard } from './pages/coach/CoachDashboard';
+import ViewTraineeWorkout from './pages/coach/ViewTraineeWorkout';
+import CreateWorkoutPlan from './pages/coach/CreateWorkoutPlan';
+import EditWorkoutPlan from './pages/coach/EditWorkoutPlan';
 
-// Placeholder components for protected routes
-const CoachDashboard = () => (
-  <Layout>
-    <div>לוח בקרה למאמן</div>
-  </Layout>
-);
-
+// Placeholder for trainee dashboard
 const TraineeDashboard = () => (
   <Layout>
     <div>לוח בקרה למתאמן</div>
@@ -44,6 +42,33 @@ function App() {
                   </ProtectedRoute>
                 }
               />
+              
+              {/* Coach workout management routes */}
+              <Route
+                path="/coach/trainee/:traineeId/workout"
+                element={
+                  <ProtectedRoute allowedRoles={['coach']}>
+                    <ViewTraineeWorkout />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/coach/trainee/:traineeId/create-plan"
+                element={
+                  <ProtectedRoute allowedRoles={['coach']}>
+                    <CreateWorkoutPlan />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/coach/trainee/:traineeId/edit-plan"
+                element={
+                  <ProtectedRoute allowedRoles={['coach']}>
+                    <EditWorkoutPlan />
+                  </ProtectedRoute>
+                }
+              />
+
               <Route
                 path="/coach/invitation"
                 element={

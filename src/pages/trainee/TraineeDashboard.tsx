@@ -1,83 +1,149 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Layout } from '../../components/layout/Layout';
 import { useAuth } from '../../contexts/AuthContext';
 import { useWorkoutPlan } from '../../hooks/useWorkoutPlan';
 import { WorkoutPlanDisplay } from '../../components/workout/WorkoutPlanDisplay';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../config/firebase';
+import { UserData } from '../../contexts/AuthContext';
 
 export const TraineeDashboard: React.FC = () => {
   const { userData } = useAuth();
-  const { workoutPlan, loading, error } = useWorkoutPlan();
+  const { workoutPlan, loading: workoutLoading, error: workoutError } = useWorkoutPlan();
+  const [coach, setCoach] = useState<UserData | null>(null);
+  const [coachLoading, setCoachLoading] = useState(true);
+  const [coachError, setCoachError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchCoachData = async () => {
+      if (!userData?.coachId) {
+        console.log('No coachId found for trainee:', userData);
+        setCoachLoading(false);
+        return;
+      }
+
+      try {
+        console.log('Fetching coach data for ID:', userData.coachId);
+        const coachDoc = await getDoc(doc(db, 'users', userData.coachId));
+        
+        if (coachDoc.exists()) {
+          const coachData = coachDoc.data() as UserData;
+          console.log('Found coach data:', {
+            name: coachData.fullName,
+            email: coachData.email,
+            phone: coachData.phoneNumber || coachData.phone
+          });
+          setCoach(coachData);
+        } else {
+          console.error('Coach document not found for ID:', userData.coachId);
+          setCoachError('המאמן לא נמצא');
+        }
+      } catch (err) {
+        console.error('Error fetching coach data:', err);
+        setCoachError('שגיאה בטעינת פרטי המאמן');
+      } finally {
+        setCoachLoading(false);
+      }
+    };
+
+    fetchCoachData();
+  }, [userData?.coachId]);
+
+  if (coachLoading || workoutLoading) {
+    return (
+      <Layout>
+        <div className="flex justify-center items-center min-h-screen">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-2xl font-bold">לוח בקרה</h1>
-          <div className="flex space-x-4">
-            <Link
-              to={`/trainee/coach/${userData?.coachId}`}
-              className="bg-primary text-white px-4 py-2 rounded hover:bg-primary-dark"
-            >
-              פרטי המאמן
-            </Link>
-            <Link
-              to="/settings"
-              className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
-            >
-              הגדרות
-            </Link>
-          </div>
+          <Link
+            to="/settings"
+            className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+          >
+            הגדרות
+          </Link>
         </div>
 
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-7xl mx-auto space-y-8">
+          {/* Coach Details Section */}
           <div className="bg-white shadow rounded-lg">
             <div className="px-4 py-5 sm:px-6">
-              <h2 className="text-lg font-medium text-gray-900">תוכנית האימון שלך</h2>
+              <h2 className="text-lg font-medium text-gray-900">פרטי המאמן</h2>
               <p className="mt-1 text-sm text-gray-500">
-                עקוב אחר תוכנית האימון שהותאמה עבורך
+                פרטי הקשר של המאמן שלך
               </p>
             </div>
 
             <div className="border-t border-gray-200">
-              {loading ? (
-                <div className="px-4 py-5 sm:p-6">
-                  <div className="flex justify-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-                  </div>
-                </div>
-              ) : error ? (
+              {coachError ? (
                 <div className="px-4 py-5 sm:p-6">
                   <div className="bg-red-50 p-4 rounded-md">
-                    <p className="text-sm text-red-700">{error}</p>
+                    <p className="text-sm text-red-700">{coachError}</p>
                   </div>
                 </div>
-              ) : !workoutPlan ? (
+              ) : coach ? (
                 <div className="px-4 py-5 sm:p-6">
-                  <div className="text-center py-12">
-                    <svg
-                      className="mx-auto h-12 w-12 text-gray-400"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      aria-hidden="true"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                      />
-                    </svg>
-                    <h3 className="mt-2 text-sm font-medium text-gray-900">אין עדיין תוכנית אימון</h3>
-                    <p className="mt-1 text-sm text-gray-500">
-                      המאמן שלך יקבל עבורך תוכנית אימון בקרוב
-                    </p>
+                  <div className="flex items-center space-x-4 space-x-reverse">
+                    <img
+                      src={coach.avatar || '/assets/avatars/default.png'}
+                      alt={coach.fullName}
+                      className="w-16 h-16 rounded-full"
+                    />
+                    <div>
+                      <h3 className="text-lg font-medium text-gray-900">{coach.fullName}</h3>
+                      <p className="text-sm text-gray-500">{coach.email}</p>
+                      {(coach.phoneNumber || coach.phone) && (
+                        <p className="text-sm text-gray-500 mt-1">
+                          טלפון: {coach.phoneNumber || coach.phone}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
               ) : (
                 <div className="px-4 py-5 sm:p-6">
+                  <div className="text-center py-4">
+                    <p className="text-sm text-gray-500">לא נמצאו פרטי מאמן</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Workout Plan Section */}
+          <div className="bg-white shadow rounded-lg">
+            <div className="px-4 py-5 sm:px-6">
+              <h2 className="text-lg font-medium text-gray-900">תוכנית האימון שלי</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                תוכנית האימון הנוכחית שלך
+              </p>
+            </div>
+
+            <div className="border-t border-gray-200">
+              {workoutError ? (
+                <div className="px-4 py-5 sm:p-6">
+                  <div className="bg-red-50 p-4 rounded-md">
+                    <p className="text-sm text-red-700">{workoutError}</p>
+                  </div>
+                </div>
+              ) : workoutPlan ? (
+                <div className="px-4 py-5 sm:p-6">
                   <WorkoutPlanDisplay workoutPlan={workoutPlan} />
+                </div>
+              ) : (
+                <div className="px-4 py-5 sm:p-6">
+                  <div className="text-center py-4">
+                    <p className="text-sm text-gray-500">אין תוכנית אימון פעילה</p>
+                  </div>
                 </div>
               )}
             </div>

@@ -7,7 +7,7 @@ import {
   onAuthStateChanged,
   updateProfile
 } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 
 // Define user types
@@ -31,7 +31,7 @@ interface AuthContextType {
   currentUser: User | null;
   userData: UserData | null;
   loading: boolean;
-  signup: (email: string, password: string, fullName: string, role: UserRole, coachId?: string) => Promise<void>;
+  signup: (email: string, password: string, fullName: string, role: UserRole, invitationCode?: string) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   generateInvitationCode: () => Promise<string>;
@@ -60,9 +60,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Fetch user data from Firestore
   const fetchUserData = async (uid: string) => {
     try {
+      console.log('Fetching user data for ID:', uid);
       const userDoc = await getDoc(doc(db, 'users', uid));
       if (userDoc.exists()) {
-        setUserData(userDoc.data() as UserData);
+        const data = userDoc.data() as UserData;
+        console.log('Found user data:', data.fullName, data.email, 'role:', data.role);
+        if (data.coachId) {
+          console.log('User has coachId:', data.coachId);
+        }
+        setUserData(data);
+      } else {
+        console.error('User document not found for ID:', uid);
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
@@ -72,7 +80,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Refresh user data
   const refreshUserData = async () => {
     if (currentUser) {
+      console.log('Refreshing user data for ID:', currentUser.uid);
       await fetchUserData(currentUser.uid);
+    } else {
+      console.error('Cannot refresh user data: no current user');
     }
   };
 
@@ -109,60 +120,116 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   // Sign up function
-  const signup = async (email: string, password: string, fullName: string, role: UserRole, coachId?: string) => {
+  const signup = async (email: string, password: string, fullName: string, role: UserRole, invitationCode?: string) => {
     try {
+      // For trainees, verify invitation code and get coachId first
+      let coachDoc;
+      if (role === 'trainee') {
+        if (!invitationCode) {
+          throw new Error('קוד הזמנה נדרש להרשמה');
+        }
+
+        // Find coach with this invitation code
+        const usersRef = collection(db, 'users');
+        const q = query(
+          usersRef, 
+          where('invitationCode', '==', invitationCode.trim().toUpperCase()),
+          where('role', '==', 'coach')
+        );
+        
+        console.log('Searching for coach with invitation code:', invitationCode.trim().toUpperCase());
+        const querySnapshot = await getDocs(q);
+        
+        if (querySnapshot.empty) {
+          console.error('No coach found with invitation code:', invitationCode);
+          throw new Error('קוד הזמנה לא תקין');
+        }
+        
+        coachDoc = querySnapshot.docs[0];
+        console.log('Found coach document:', { 
+          coachId: coachDoc.id, 
+          invitationCode: coachDoc.data().invitationCode,
+          coachName: coachDoc.data().fullName
+        });
+      }
+
+      // Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
+      const newUser = userCredential.user;
       
       // Update display name
-      await updateProfile(user, { displayName: fullName });
+      await updateProfile(newUser, { displayName: fullName });
+
+      // Save to Firestore
+      const userRef = doc(db, 'users', newUser.uid);
       
-      // Create initial user data without invitation code
-      const userData: UserData = {
-        uid: user.uid,
-        email: user.email!,
-        fullName: user.displayName || '',
-        role,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-      
-      // Only add coachId if it's provided and not undefined
-      if (role === 'trainee' && coachId) {
-        userData.coachId = coachId;
-      }
-      
-      // Save user data to Firestore first
-      await setDoc(doc(db, 'users', user.uid), userData);
-      
-      // Set user data in local state
-      setUserData(userData);
-      
-      // For coaches, generate invitation code after user is created
-      if (role === 'coach') {
-        try {
-          // Generate invitation code
-          const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-          
-          // Create a clean update object without undefined values
-          const updateData: Partial<UserData> = {
-            invitationCode: code,
-            updatedAt: new Date()
-          };
-          
-          // Update the coach's document with the invitation code
-          await setDoc(doc(db, 'users', user.uid), updateData, { merge: true });
-          
-          // Update local state
-          setUserData({
-            ...userData,
-            invitationCode: code
-          });
-        } catch (error) {
-          console.error('Error generating invitation code:', error);
-          // Continue with signup even if invitation code generation fails
+      if (role === 'trainee' && coachDoc) {
+        // For trainees - include coachId
+        console.log('Saving trainee with coachId:', coachDoc.id);
+        const traineeData: UserData = {
+          uid: newUser.uid,
+          email: newUser.email!,
+          fullName,
+          role: 'trainee',
+          coachId: coachDoc.id,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        
+        console.log('Trainee data to save:', traineeData);
+        await setDoc(userRef, traineeData);
+        
+        // Verify the data was saved correctly
+        const verifyDoc = await getDoc(userRef);
+        const savedData = verifyDoc.data();
+        console.log('Verification - saved trainee data:', savedData);
+        
+        if (!savedData?.coachId) {
+          console.error('Failed to save coachId in trainee document');
+          throw new Error('שגיאה בשמירת נתוני המתאמן');
         }
+        
+        if (savedData.coachId !== coachDoc.id) {
+          console.error('Saved coachId does not match expected value');
+          console.error('Expected:', coachDoc.id);
+          console.error('Got:', savedData.coachId);
+          throw new Error('שגיאה בשמירת נתוני המתאמן');
+        }
+        
+        // Set user data in local state
+        setUserData(savedData as UserData);
+        
+      } else if (role === 'coach') {
+        // For coaches - generate and include invitation code
+        const invitationCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+        console.log('Saving coach with invitation code:', invitationCode);
+        const coachData: UserData = {
+          uid: newUser.uid,
+          email: newUser.email!,
+          fullName,
+          role: 'coach',
+          invitationCode,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        
+        console.log('Coach data to save:', coachData);
+        await setDoc(userRef, coachData);
+        
+        // Verify the data was saved correctly
+        const verifyDoc = await getDoc(userRef);
+        const savedData = verifyDoc.data();
+        console.log('Verification - saved coach data:', savedData);
+        
+        if (!savedData?.invitationCode) {
+          console.error('Failed to save invitation code in coach document');
+          throw new Error('שגיאה בשמירת נתוני המאמן');
+        }
+        
+        // Set user data in local state
+        setUserData(savedData as UserData);
       }
+
     } catch (error) {
       console.error('Error during signup:', error);
       throw error;
@@ -172,11 +239,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Login function
   const login = async (email: string, password: string) => {
     try {
+      setLoading(true);
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       await fetchUserData(userCredential.user.uid);
     } catch (error) {
       console.error('Error during login:', error);
       throw error;
+    } finally {
+      setLoading(false);
     }
   };
 

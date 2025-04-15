@@ -1,13 +1,22 @@
+export type UserRole = 'coach' | 'trainee';
+
 export interface UserData {
   uid: string;
   email: string;
   fullName: string;
-  phone?: string;
+  role: UserRole;
   phoneNumber?: string;
+  phone?: string; // For backward compatibility
   avatar?: string;
-  role: 'coach' | 'trainee';
-  invitationCode?: string;
   coachId?: string;
+  invitationCode?: string;
   createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface UpdateUserData {
+  fullName?: string;
+  phoneNumber?: string;
+  phone?: string;
   updatedAt: Date;
 } 

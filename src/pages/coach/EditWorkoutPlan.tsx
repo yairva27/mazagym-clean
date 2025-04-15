@@ -1,34 +1,45 @@
-import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useCoachWorkoutPlans } from '../../hooks/useCoachWorkoutPlans';
-import { WorkoutPlan, WorkoutDay, Exercise } from '../../types/workout';
-import Layout from '../../components/Layout';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { Layout } from '../../components/layout/Layout';
 import { useAuth } from '../../contexts/AuthContext';
+import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, addDoc, Timestamp } from 'firebase/firestore';
+import { db } from '../../config/firebase';
+
+interface Exercise {
+  id: string;
+  name: string;
+  sets: number;
+  reps: number;
+  weight: number;
+  notes: string;
+  restTime: number;
+}
+
+interface WorkoutDay {
+  id: string;
+  name: string;
+  exercises: Exercise[];
+}
+
+interface WorkoutPlan {
+  id: string;
+  name: string;
+  traineeId: string;
+  coachId: string;
+  isActive: boolean;
+  days: WorkoutDay[];
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 const EditWorkoutPlan: React.FC = () => {
   const { traineeId } = useParams<{ traineeId: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const {
-    workoutPlans,
-    loading,
-    error,
-    createWorkoutPlan,
-    updateWorkoutPlan,
-    deleteWorkoutPlan,
-    setActivePlan,
-    addWorkoutDay,
-    updateWorkoutDay,
-    deleteWorkoutDay,
-    addExercise,
-    updateExercise,
-    deleteExercise,
-  } = useCoachWorkoutPlans(traineeId || '');
-
-  const [selectedPlan, setSelectedPlan] = useState<WorkoutPlan | null>(null);
+  const { userData } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [workoutPlan, setWorkoutPlan] = useState<WorkoutPlan | null>(null);
   const [selectedDay, setSelectedDay] = useState<WorkoutDay | null>(null);
-  const [newPlanName, setNewPlanName] = useState('');
-  const [newDayName, setNewDayName] = useState('');
   const [newExercise, setNewExercise] = useState<Partial<Exercise>>({
     name: '',
     sets: 3,
@@ -38,15 +49,77 @@ const EditWorkoutPlan: React.FC = () => {
     restTime: 60,
   });
 
-  if (!user || !traineeId) {
-    return <div>Unauthorized</div>;
-  }
+  useEffect(() => {
+    const fetchWorkoutPlan = async () => {
+      if (!traineeId || !userData?.uid) return;
+
+      try {
+        setLoading(true);
+        const workoutPlansRef = collection(db, 'workoutPlans');
+        const q = query(
+          workoutPlansRef,
+          where('traineeId', '==', traineeId),
+          where('isActive', '==', true)
+        );
+
+        const querySnapshot = await getDocs(q);
+        
+        if (querySnapshot.empty) {
+          setError('לא נמצאה תוכנית אימון פעילה');
+          setLoading(false);
+          return;
+        }
+
+        const planDoc = querySnapshot.docs[0];
+        const planData = planDoc.data();
+        
+        setWorkoutPlan({
+          id: planDoc.id,
+          name: planData.name || '',
+          traineeId: planData.traineeId,
+          coachId: planData.coachId,
+          isActive: planData.isActive,
+          days: planData.days || [],
+          createdAt: planData.createdAt?.toDate() || new Date(),
+          updatedAt: planData.updatedAt?.toDate() || new Date()
+        });
+
+      } catch (err) {
+        console.error('Error fetching workout plan:', err);
+        setError('שגיאה בטעינת תוכנית האימון');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchWorkoutPlan();
+  }, [traineeId, userData?.uid]);
+
+  const handleUpdatePlan = async () => {
+    if (!workoutPlan || !traineeId) return;
+
+    try {
+      const planRef = doc(db, 'workoutPlans', workoutPlan.id);
+      await updateDoc(planRef, {
+        ...workoutPlan,
+        updatedAt: Timestamp.now()
+      });
+      
+      navigate('/coach/dashboard');
+    } catch (err) {
+      console.error('Error updating workout plan:', err);
+      setError('שגיאה בעדכון תוכנית האימון');
+    }
+  };
 
   if (loading) {
     return (
       <Layout>
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <div className="flex justify-center items-center h-[calc(100vh-64px)]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
+            <p className="mt-4">טוען תוכנית אימון...</p>
+          </div>
         </div>
       </Layout>
     );
@@ -55,35 +128,23 @@ const EditWorkoutPlan: React.FC = () => {
   if (error) {
     return (
       <Layout>
-        <div className="text-red-500 text-center p-4">{error}</div>
+        <div className="container mx-auto px-4 py-8">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold mb-6">עריכת תוכנית אימון</h1>
+            <div className="bg-white shadow rounded-lg p-8 max-w-md mx-auto">
+              <p className="text-gray-600 mb-6">לא נמצאה תוכנית אימון למתאמן זה.</p>
+              <Link
+                to={`/coach/trainee/${traineeId}/create-plan`}
+                className="inline-block bg-primary text-white px-6 py-2 rounded-lg hover:bg-primary-dark transition-colors"
+              >
+                יצירת תוכנית אימון
+              </Link>
+            </div>
+          </div>
+        </div>
       </Layout>
     );
   }
-
-  const handleCreatePlan = async () => {
-    if (!newPlanName.trim()) return;
-    await createWorkoutPlan(newPlanName);
-    setNewPlanName('');
-  };
-
-  const handleCreateDay = async () => {
-    if (!selectedPlan || !newDayName.trim()) return;
-    await addWorkoutDay(selectedPlan.id, newDayName);
-    setNewDayName('');
-  };
-
-  const handleAddExercise = async () => {
-    if (!selectedPlan || !selectedDay || !newExercise.name) return;
-    await addExercise(selectedPlan.id, selectedDay.id, newExercise as Exercise);
-    setNewExercise({
-      name: '',
-      sets: 3,
-      reps: 10,
-      weight: 0,
-      notes: '',
-      restTime: 60,
-    });
-  };
 
   return (
     <Layout>
@@ -98,232 +159,165 @@ const EditWorkoutPlan: React.FC = () => {
           </button>
         </div>
 
-        {/* Create New Plan */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-          <h2 className="text-xl font-semibold mb-4">יצירת תוכנית חדשה</h2>
-          <div className="flex gap-4">
-            <input
-              type="text"
-              value={newPlanName}
-              onChange={(e) => setNewPlanName(e.target.value)}
-              placeholder="שם התוכנית"
-              className="flex-1 p-2 border rounded"
-            />
-            <button
-              onClick={handleCreatePlan}
-              className="bg-primary text-white px-4 py-2 rounded hover:bg-primary-dark"
-            >
-              צור תוכנית
-            </button>
-          </div>
-        </div>
+        {workoutPlan && (
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                שם התוכנית
+              </label>
+              <input
+                type="text"
+                value={workoutPlan.name}
+                onChange={(e) => setWorkoutPlan({ ...workoutPlan, name: e.target.value })}
+                className="w-full p-2 border rounded-lg"
+              />
+            </div>
 
-        {/* Workout Plans List */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {workoutPlans.map((plan) => (
-            <div
-              key={plan.id}
-              className={`bg-white rounded-lg shadow-md p-6 ${
-                selectedPlan?.id === plan.id ? 'ring-2 ring-primary' : ''
-              }`}
-            >
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">{plan.name}</h3>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setSelectedPlan(plan)}
-                    className="bg-primary text-white px-3 py-1 rounded hover:bg-primary-dark"
-                  >
-                    ערוך
-                  </button>
-                  <button
-                    onClick={() => deleteWorkoutPlan(plan.id)}
-                    className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
-                  >
-                    מחק
-                  </button>
-                  {!plan.isActive && (
-                    <button
-                      onClick={() => setActivePlan(plan.id)}
-                      className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600"
-                    >
-                      הפעל
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {selectedPlan?.id === plan.id && (
-                <div className="space-y-4">
-                  {/* Create New Day */}
-                  <div className="flex gap-4">
+            <div className="space-y-6">
+              {workoutPlan.days.map((day, dayIndex) => (
+                <div key={day.id} className="border rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-4">
                     <input
                       type="text"
-                      value={newDayName}
-                      onChange={(e) => setNewDayName(e.target.value)}
-                      placeholder="שם היום"
-                      className="flex-1 p-2 border rounded"
+                      value={day.name}
+                      onChange={(e) => {
+                        const updatedDays = [...workoutPlan.days];
+                        updatedDays[dayIndex] = { ...day, name: e.target.value };
+                        setWorkoutPlan({ ...workoutPlan, days: updatedDays });
+                      }}
+                      className="text-lg font-medium p-2 border rounded"
                     />
                     <button
-                      onClick={handleCreateDay}
-                      className="bg-primary text-white px-4 py-2 rounded hover:bg-primary-dark"
+                      onClick={() => {
+                        const updatedDays = workoutPlan.days.filter(d => d.id !== day.id);
+                        setWorkoutPlan({ ...workoutPlan, days: updatedDays });
+                      }}
+                      className="text-red-500 hover:text-red-600"
                     >
-                      הוסף יום
+                      מחק יום
                     </button>
                   </div>
 
-                  {/* Workout Days */}
                   <div className="space-y-4">
-                    {plan.days.map((day) => (
-                      <div
-                        key={day.id}
-                        className={`border rounded p-4 ${
-                          selectedDay?.id === day.id ? 'border-primary' : ''
-                        }`}
-                      >
-                        <div className="flex justify-between items-center mb-2">
-                          <h4 className="font-medium">{day.name}</h4>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => setSelectedDay(day)}
-                              className="text-primary hover:text-primary-dark"
-                            >
-                              ערוך
-                            </button>
-                            <button
-                              onClick={() => deleteWorkoutDay(plan.id, day.id)}
-                              className="text-red-500 hover:text-red-600"
-                            >
-                              מחק
-                            </button>
+                    {day.exercises.map((exercise, exerciseIndex) => (
+                      <div key={exercise.id} className="border rounded p-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              תרגיל
+                            </label>
+                            <input
+                              type="text"
+                              value={exercise.name}
+                              onChange={(e) => {
+                                const updatedDays = [...workoutPlan.days];
+                                updatedDays[dayIndex].exercises[exerciseIndex].name = e.target.value;
+                                setWorkoutPlan({ ...workoutPlan, days: updatedDays });
+                              }}
+                              className="w-full p-2 border rounded"
+                            />
                           </div>
-                        </div>
-
-                        {selectedDay?.id === day.id && (
-                          <div className="space-y-4">
-                            {/* Add New Exercise */}
-                            <div className="grid grid-cols-2 gap-4">
-                              <input
-                                type="text"
-                                value={newExercise.name}
-                                onChange={(e) =>
-                                  setNewExercise({ ...newExercise, name: e.target.value })
-                                }
-                                placeholder="שם התרגיל"
-                                className="p-2 border rounded"
-                              />
+                          <div className="grid grid-cols-3 gap-2">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                סטים
+                              </label>
                               <input
                                 type="number"
-                                value={newExercise.sets}
-                                onChange={(e) =>
-                                  setNewExercise({
-                                    ...newExercise,
-                                    sets: parseInt(e.target.value),
-                                  })
-                                }
-                                placeholder="מספר סטים"
-                                className="p-2 border rounded"
-                              />
-                              <input
-                                type="number"
-                                value={newExercise.reps}
-                                onChange={(e) =>
-                                  setNewExercise({
-                                    ...newExercise,
-                                    reps: parseInt(e.target.value),
-                                  })
-                                }
-                                placeholder="מספר חזרות"
-                                className="p-2 border rounded"
-                              />
-                              <input
-                                type="number"
-                                value={newExercise.weight}
-                                onChange={(e) =>
-                                  setNewExercise({
-                                    ...newExercise,
-                                    weight: parseInt(e.target.value),
-                                  })
-                                }
-                                placeholder="משקל (ק"ג)"
-                                className="p-2 border rounded"
-                              />
-                              <input
-                                type="number"
-                                value={newExercise.restTime}
-                                onChange={(e) =>
-                                  setNewExercise({
-                                    ...newExercise,
-                                    restTime: parseInt(e.target.value),
-                                  })
-                                }
-                                placeholder="זמן מנוחה (שניות)"
-                                className="p-2 border rounded"
-                              />
-                              <textarea
-                                value={newExercise.notes}
-                                onChange={(e) =>
-                                  setNewExercise({ ...newExercise, notes: e.target.value })
-                                }
-                                placeholder="הערות"
-                                className="p-2 border rounded"
+                                value={exercise.sets}
+                                onChange={(e) => {
+                                  const updatedDays = [...workoutPlan.days];
+                                  updatedDays[dayIndex].exercises[exerciseIndex].sets = Number(e.target.value);
+                                  setWorkoutPlan({ ...workoutPlan, days: updatedDays });
+                                }}
+                                className="w-full p-2 border rounded"
                               />
                             </div>
-                            <button
-                              onClick={handleAddExercise}
-                              className="w-full bg-primary text-white px-4 py-2 rounded hover:bg-primary-dark"
-                            >
-                              הוסף תרגיל
-                            </button>
-                          </div>
-                        )}
-
-                        {/* Exercises List */}
-                        <div className="mt-4 space-y-2">
-                          {day.exercises.map((exercise) => (
-                            <div
-                              key={exercise.id}
-                              className="flex justify-between items-center p-2 bg-gray-50 rounded"
-                            >
-                              <div>
-                                <span className="font-medium">{exercise.name}</span>
-                                <span className="text-sm text-gray-500 ml-2">
-                                  {exercise.sets} x {exercise.reps}
-                                  {exercise.weight > 0 && ` @ ${exercise.weight}kg`}
-                                </span>
-                              </div>
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() =>
-                                    updateExercise(plan.id, day.id, {
-                                      ...exercise,
-                                      completed: !exercise.completed,
-                                    })
-                                  }
-                                  className="text-primary hover:text-primary-dark"
-                                >
-                                  עדכן
-                                </button>
-                                <button
-                                  onClick={() =>
-                                    deleteExercise(plan.id, day.id, exercise.id)
-                                  }
-                                  className="text-red-500 hover:text-red-600"
-                                >
-                                  מחק
-                                </button>
-                              </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                חזרות
+                              </label>
+                              <input
+                                type="number"
+                                value={exercise.reps}
+                                onChange={(e) => {
+                                  const updatedDays = [...workoutPlan.days];
+                                  updatedDays[dayIndex].exercises[exerciseIndex].reps = Number(e.target.value);
+                                  setWorkoutPlan({ ...workoutPlan, days: updatedDays });
+                                }}
+                                className="w-full p-2 border rounded"
+                              />
                             </div>
-                          ))}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                משקל
+                              </label>
+                              <input
+                                type="number"
+                                value={exercise.weight}
+                                onChange={(e) => {
+                                  const updatedDays = [...workoutPlan.days];
+                                  updatedDays[dayIndex].exercises[exerciseIndex].weight = Number(e.target.value);
+                                  setWorkoutPlan({ ...workoutPlan, days: updatedDays });
+                                }}
+                                className="w-full p-2 border rounded"
+                              />
+                            </div>
+                          </div>
                         </div>
                       </div>
                     ))}
+                    <button
+                      onClick={() => {
+                        const updatedDays = [...workoutPlan.days];
+                        updatedDays[dayIndex].exercises.push({
+                          id: Date.now().toString(),
+                          name: 'תרגיל חדש',
+                          sets: 3,
+                          reps: 10,
+                          weight: 0,
+                          notes: '',
+                          restTime: 60
+                        });
+                        setWorkoutPlan({ ...workoutPlan, days: updatedDays });
+                      }}
+                      className="w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600"
+                    >
+                      הוסף תרגיל
+                    </button>
                   </div>
                 </div>
-              )}
+              ))}
             </div>
-          ))}
-        </div>
+
+            <div className="mt-6 flex justify-between">
+              <button
+                onClick={() => {
+                  setWorkoutPlan({
+                    ...workoutPlan,
+                    days: [
+                      ...workoutPlan.days,
+                      {
+                        id: Date.now().toString(),
+                        name: 'יום חדש',
+                        exercises: []
+                      }
+                    ]
+                  });
+                }}
+                className="bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600"
+              >
+                הוסף יום אימון
+              </button>
+              <button
+                onClick={handleUpdatePlan}
+                className="bg-blue-600 text-white py-2 px-6 rounded hover:bg-blue-700"
+              >
+                שמור שינויים
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </Layout>
   );
