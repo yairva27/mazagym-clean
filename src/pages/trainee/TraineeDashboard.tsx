@@ -4,14 +4,16 @@ import { Layout } from '../../components/layout/Layout';
 import { useAuth } from '../../contexts/AuthContext';
 import { useWorkoutPlan } from '../../hooks/useWorkoutPlan';
 import { WorkoutPlanDisplay } from '../../components/workout/WorkoutPlanDisplay';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { UserData } from '../../contexts/AuthContext';
+import { useNotification } from '../../contexts/NotificationContext';
 
 export const TraineeDashboard: React.FC = () => {
   console.log('TraineeDashboard component rendering'); // Debug log
   
   const { userData } = useAuth();
+  const { showNotification, showConfirmation } = useNotification();
   console.log('TraineeDashboard: userData received', { 
     exists: !!userData,
     role: userData?.role,
@@ -28,6 +30,7 @@ export const TraineeDashboard: React.FC = () => {
   const [coach, setCoach] = useState<UserData | null>(null);
   const [coachLoading, setCoachLoading] = useState(true);
   const [coachError, setCoachError] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     const fetchCoachData = async () => {
@@ -64,6 +67,53 @@ export const TraineeDashboard: React.FC = () => {
     fetchCoachData();
   }, [userData?.coachId]);
 
+  const handleResetWeek = async () => {
+    if (!workoutPlan) return;
+    
+    setResetting(true);
+    try {
+      // Get the active workout plan document
+      const planRef = doc(db, 'workoutPlans', workoutPlan.id);
+      const planDoc = await getDoc(planRef);
+      
+      if (!planDoc.exists()) {
+        throw new Error('תוכנית האימון לא נמצאה');
+      }
+      
+      const planData = planDoc.data();
+      const updatedDays = planData.days.map((day: any) => {
+        // Reset each exercise in the day
+        const updatedExercises = day.exercises.map((exercise: any) => ({
+          ...exercise,
+          completed: false,
+          completedAt: null
+        }));
+        
+        return {
+          ...day,
+          exercises: updatedExercises
+        };
+      });
+      
+      // Update the workout plan with reset exercises
+      await updateDoc(planRef, {
+        days: updatedDays,
+        updatedAt: Timestamp.now()
+      });
+      
+      // Show success notification
+      showNotification('השבוע החדש התחיל! כל הסימונים אופסו.', 'success');
+      
+      // Reload the page to refresh the workout plan
+      window.location.reload();
+    } catch (error) {
+      console.error('Error resetting workout plan:', error);
+      showNotification('שגיאה באיפוס תוכנית האימון', 'error');
+    } finally {
+      setResetting(false);
+    }
+  };
+
   if (coachLoading || workoutLoading) {
     console.log('TraineeDashboard: showing loading state', { coachLoading, workoutLoading }); // Debug log
     return (
@@ -87,12 +137,28 @@ export const TraineeDashboard: React.FC = () => {
       <div className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-2xl font-bold">לוח בקרה</h1>
-          <Link
-            to="/settings"
-            className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
-          >
-            הגדרות
-          </Link>
+          <div className="flex gap-2">
+            {userData?.role === 'trainee' && workoutPlan && (
+              <button
+                onClick={() => showConfirmation(
+                  'להתחיל שבוע חדש?',
+                  'האם אתה בטוח שתרצה לאפס את כל הסימונים של התרגילים שבוצעו?',
+                  handleResetWeek,
+                  'warning'
+                )}
+                disabled={resetting}
+                className="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {resetting ? 'מאפס...' : 'התחלת שבוע חדש'}
+              </button>
+            )}
+            <Link
+              to="/settings"
+              className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+            >
+              הגדרות
+            </Link>
+          </div>
         </div>
 
         <div className="max-w-7xl mx-auto space-y-8">

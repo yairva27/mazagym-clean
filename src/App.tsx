@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Suspense } from 'react';
 import { AuthProvider, UserData, useAuth } from './contexts/AuthContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { LoginPage } from './pages/auth/LoginPage';
 import { SignupPage } from './pages/auth/SignupPage';
@@ -21,110 +22,112 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <div dir="rtl">
-          <Suspense fallback={<div>טוען...</div>}>
-            <Routes>
-              {/* Public routes */}
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/signup" element={<SignupPage />} />
+        <NotificationProvider>
+          <div dir="rtl">
+            <Suspense fallback={<div>טוען...</div>}>
+              <Routes>
+                {/* Public routes */}
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/signup" element={<SignupPage />} />
 
-              {/* Protected routes */}
-              <Route
-                path="/coach/dashboard"
-                element={
-                  <ProtectedRoute allowedRoles={['coach']}>
-                    <CoachDashboard />
-                  </ProtectedRoute>
-                }
-              />
-              
-              {/* Coach workout management routes */}
-              <Route
-                path="/coach/trainee/:traineeId/workout"
-                element={
-                  <ProtectedRoute allowedRoles={['coach']}>
-                    <ViewTraineeWorkout />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/coach/trainee/:traineeId/create-plan"
-                element={
-                  <ProtectedRoute allowedRoles={['coach']}>
-                    <CreateWorkoutPlan />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/coach/trainee/:traineeId/edit-plan"
-                element={
-                  <ProtectedRoute allowedRoles={['coach']}>
-                    <EditWorkoutPlan />
-                  </ProtectedRoute>
-                }
-              />
+                {/* Protected routes */}
+                <Route
+                  path="/coach/dashboard"
+                  element={
+                    <ProtectedRoute allowedRoles={['coach']}>
+                      <CoachDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                
+                {/* Coach workout management routes */}
+                <Route
+                  path="/coach/trainee/:traineeId/workout"
+                  element={
+                    <ProtectedRoute allowedRoles={['coach']}>
+                      <ViewTraineeWorkout />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/coach/trainee/:traineeId/create-plan"
+                  element={
+                    <ProtectedRoute allowedRoles={['coach']}>
+                      <CreateWorkoutPlan />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/coach/trainee/:traineeId/edit-plan"
+                  element={
+                    <ProtectedRoute allowedRoles={['coach']}>
+                      <EditWorkoutPlan />
+                    </ProtectedRoute>
+                  }
+                />
 
-              <Route
-                path="/coach/invitation"
-                element={
-                  <ProtectedRoute allowedRoles={['coach']}>
-                    <InvitationCodePage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/trainee/dashboard"
-                element={
-                  <ProtectedRoute allowedRoles={['trainee']}>
-                    <TraineeDashboard />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/trainee/workout/:dayId"
-                element={
-                  <ProtectedRoute allowedRoles={['trainee']}>
-                    <WorkoutDayView />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/settings"
-                element={
-                  <ProtectedRoute>
-                    <SettingsPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/settings/avatar"
-                element={
-                  <ProtectedRoute>
-                    <AvatarSettings />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/trainee/coach/:coachId"
-                element={
-                  <ProtectedRoute allowedRoles={['trainee']}>
-                    <CoachInfo />
-                  </ProtectedRoute>
-                }
-              />
+                <Route
+                  path="/coach/invitation"
+                  element={
+                    <ProtectedRoute allowedRoles={['coach']}>
+                      <InvitationCodePage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/trainee/dashboard"
+                  element={
+                    <ProtectedRoute allowedRoles={['trainee']}>
+                      <TraineeDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/trainee/workout/:dayId"
+                  element={
+                    <ProtectedRoute allowedRoles={['trainee']}>
+                      <WorkoutDayView />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/settings"
+                  element={
+                    <ProtectedRoute>
+                      <SettingsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/settings/avatar"
+                  element={
+                    <ProtectedRoute>
+                      <AvatarSettings />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/trainee/coach/:coachId"
+                  element={
+                    <ProtectedRoute allowedRoles={['trainee']}>
+                      <CoachInfo />
+                    </ProtectedRoute>
+                  }
+                />
 
-              {/* Redirect root to appropriate dashboard based on role */}
-              <Route
-                path="/"
-                element={
-                  <ProtectedRoute>
-                    <RootRedirect />
-                  </ProtectedRoute>
-                }
-              />
-            </Routes>
-          </Suspense>
-        </div>
+                {/* Redirect root to appropriate dashboard based on role */}
+                <Route
+                  path="/"
+                  element={
+                    <ProtectedRoute>
+                      <RootRedirect />
+                    </ProtectedRoute>
+                  }
+                />
+              </Routes>
+            </Suspense>
+          </div>
+        </NotificationProvider>
       </AuthProvider>
     </Router>
   );
