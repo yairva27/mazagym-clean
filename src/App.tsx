@@ -14,13 +14,7 @@ import { CoachDashboard } from './pages/coach/CoachDashboard';
 import ViewTraineeWorkout from './pages/coach/ViewTraineeWorkout';
 import CreateWorkoutPlan from './pages/coach/CreateWorkoutPlan';
 import EditWorkoutPlan from './pages/coach/EditWorkoutPlan';
-
-// Placeholder for trainee dashboard
-const TraineeDashboard = () => (
-  <Layout>
-    <div>לוח בקרה למתאמן</div>
-  </Layout>
-);
+import { TraineeDashboard } from './pages/trainee/TraineeDashboard';
 
 function App() {
   return (
@@ -89,7 +83,7 @@ function App() {
                 path="/settings"
                 element={
                   <ProtectedRoute>
-                    <Settings />
+                    <SettingsPage />
                   </ProtectedRoute>
                 }
               />

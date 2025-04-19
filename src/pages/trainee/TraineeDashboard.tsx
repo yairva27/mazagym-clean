@@ -9,8 +9,22 @@ import { db } from '../../config/firebase';
 import { UserData } from '../../contexts/AuthContext';
 
 export const TraineeDashboard: React.FC = () => {
+  console.log('TraineeDashboard component rendering'); // Debug log
+  
   const { userData } = useAuth();
+  console.log('TraineeDashboard: userData received', { 
+    exists: !!userData,
+    role: userData?.role,
+    uid: userData?.uid 
+  }); // Debug log
+  
   const { workoutPlan, loading: workoutLoading, error: workoutError } = useWorkoutPlan();
+  console.log('TraineeDashboard: workoutPlan hook result', { 
+    hasWorkoutPlan: !!workoutPlan,
+    loading: workoutLoading,
+    error: workoutError 
+  }); // Debug log
+  
   const [coach, setCoach] = useState<UserData | null>(null);
   const [coachLoading, setCoachLoading] = useState(true);
   const [coachError, setCoachError] = useState<string | null>(null);
@@ -51,6 +65,7 @@ export const TraineeDashboard: React.FC = () => {
   }, [userData?.coachId]);
 
   if (coachLoading || workoutLoading) {
+    console.log('TraineeDashboard: showing loading state', { coachLoading, workoutLoading }); // Debug log
     return (
       <Layout>
         <div className="flex justify-center items-center min-h-screen">
@@ -59,6 +74,13 @@ export const TraineeDashboard: React.FC = () => {
       </Layout>
     );
   }
+
+  console.log('TraineeDashboard: rendering main content', {
+    hasCoach: !!coach,
+    hasWorkoutPlan: !!workoutPlan,
+    coachError,
+    workoutError
+  }); // Debug log
 
   return (
     <Layout>
