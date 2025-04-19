@@ -24,7 +24,9 @@ export const WorkoutPlanDisplay: React.FC<WorkoutPlanDisplayProps> = ({ workoutP
       name: e.name,
       weight: e.weight,
       actualWeight: e.actualWeight,
-      hasHistory: e.weightHistory && e.weightHistory.length > 0
+      hasHistory: e.weightHistory && e.weightHistory.length > 0,
+      completed: e.completed,
+      completedAt: e.completedAt
     })))
   });
 
@@ -87,7 +89,9 @@ export const WorkoutPlanDisplay: React.FC<WorkoutPlanDisplayProps> = ({ workoutP
       actualWeight: exercise.actualWeight,
       displayWeight: actualWeight,
       hasActualWeight,
-      userRole: userData?.role
+      userRole: userData?.role,
+      completed: exercise.completed,
+      completedAt: exercise.completedAt
     });
 
     if (hasActualWeight) {
@@ -159,7 +163,22 @@ export const WorkoutPlanDisplay: React.FC<WorkoutPlanDisplayProps> = ({ workoutP
 
                 return (
                   <div key={exercise.id || exerciseIndex} className="bg-gray-50 p-4 rounded">
-                    <h4 className="font-medium">{exercise.name}</h4>
+                    <div className="flex justify-between items-center">
+                      <h4 className="font-medium">{exercise.name}</h4>
+                      {exercise.completed && (
+                        <div className="flex items-center text-green-600">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                          <span className="text-sm">בוצע</span>
+                          {exercise.completedAt && (
+                            <span className="text-xs text-gray-500 mr-2">
+                              {formatDate(exercise.completedAt)}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
                     <div className="mt-2 grid grid-cols-3 gap-4 text-sm text-gray-600">
                       <div>
                         <span className="font-medium">סטים:</span> {exercise.sets}

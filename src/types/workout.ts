@@ -20,6 +20,9 @@ export interface Exercise {
   lastCompleted?: Timestamp;
   weightHistory?: WeightHistory[];
   performance?: SetPerformance[];
+  // Fields for tracking completion status
+  completed?: boolean;
+  completedAt?: Timestamp | null;
 }
 
 export interface SetPerformance {

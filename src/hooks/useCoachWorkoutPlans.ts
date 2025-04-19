@@ -102,7 +102,9 @@ export const useCoachWorkoutPlans = (traineeId: string): UseCoachWorkoutPlansRet
                       weight: history.weight,
                       timestamp: history.timestamp,
                       notes: history.notes
-                    })) || []
+                    })) || [],
+                    completed: exercise.completed || false,
+                    completedAt: exercise.completedAt
                   };
                 }),
                 notes: day.notes || '',

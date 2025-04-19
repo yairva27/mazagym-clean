@@ -113,10 +113,10 @@ const EditWorkoutPlan: React.FC = () => {
     const newExercise: Exercise = {
       id: crypto.randomUUID(),
       name: 'תרגיל חדש',
-      sets: 3,
-      reps: 10,
-      weight: 0,
-      notes: '',
+    sets: 3,
+    reps: 10,
+    weight: 0,
+    notes: '',
       restTime: 60
     };
 
@@ -297,7 +297,7 @@ const EditWorkoutPlan: React.FC = () => {
               className="w-full p-2 border rounded"
               placeholder="הכנס שם לתוכנית האימון"
             />
-          </div>
+        </div>
 
           {workoutPlan.days.map((day, dayIndex) => (
             <div key={day.id} className="border rounded-lg p-4">
@@ -313,20 +313,20 @@ const EditWorkoutPlan: React.FC = () => {
                   className="text-lg font-medium p-2 border rounded"
                   placeholder="שם יום האימון"
                 />
-                <button
+                  <button
                   onClick={() => handleDeleteDay(day.id)}
                   className="text-red-500 hover:text-red-600"
                 >
                   מחק יום
-                </button>
+                    </button>
               </div>
 
-              <div className="space-y-4">
+                <div className="space-y-4">
                 {day.exercises.map((exercise, exerciseIndex) => (
                   <div key={exercise.id} className="bg-gray-50 p-4 rounded">
                     <div className="flex justify-between items-center mb-2">
-                      <input
-                        type="text"
+                    <input
+                      type="text"
                         value={exercise.name}
                         onChange={(e) => {
                           const updatedDays = [...workoutPlan.days];
@@ -335,19 +335,19 @@ const EditWorkoutPlan: React.FC = () => {
                         }}
                         className="font-medium p-2 border rounded"
                         placeholder="שם התרגיל"
-                      />
-                      <button
+                    />
+                    <button
                         onClick={() => handleDeleteExercise(day.id, exercise.id)}
                         className="text-red-500 hover:text-red-600"
                       >
                         מחק תרגיל
-                      </button>
-                    </div>
+                            </button>
+                          </div>
                     <div className="grid grid-cols-3 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700">סטים</label>
-                        <input
-                          type="number"
+                              <input
+                                type="number"
                           min="1"
                           value={exercise.sets}
                           onChange={(e) => {
@@ -360,8 +360,8 @@ const EditWorkoutPlan: React.FC = () => {
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700">חזרות</label>
-                        <input
-                          type="number"
+                              <input
+                                type="number"
                           min="1"
                           value={exercise.reps}
                           onChange={(e) => {
@@ -374,8 +374,8 @@ const EditWorkoutPlan: React.FC = () => {
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700">משקל (ק"ג)</label>
-                        <input
-                          type="number"
+                              <input
+                                type="number"
                           min="0"
                           value={exercise.weight}
                           onChange={(e) => {
@@ -389,7 +389,7 @@ const EditWorkoutPlan: React.FC = () => {
                     </div>
                     <div className="mt-4">
                       <label className="block text-sm font-medium text-gray-700">הערות</label>
-                      <textarea
+                              <textarea
                         value={exercise.notes || ''}
                         onChange={(e) => {
                           const updatedDays = [...workoutPlan.days];
@@ -399,17 +399,17 @@ const EditWorkoutPlan: React.FC = () => {
                         className="mt-1 block w-full p-2 border rounded"
                         rows={2}
                         placeholder="הוסף הערות לתרגיל"
-                      />
-                    </div>
+                              />
+                            </div>
                   </div>
                 ))}
-                <button
+                            <button
                   onClick={() => handleAddExercise(day.id)}
                   className="w-full bg-blue-50 hover:bg-blue-100 text-blue-600 font-semibold py-2 px-4 rounded"
-                >
-                  הוסף תרגיל
-                </button>
-              </div>
+                            >
+                              הוסף תרגיל
+                            </button>
+                          </div>
             </div>
           ))}
 
@@ -421,21 +421,21 @@ const EditWorkoutPlan: React.FC = () => {
           </button>
 
           <div className="mt-6 flex justify-end space-x-4">
-            <button
+                                <button
               onClick={() => navigate(`/coach/trainee/${traineeId}/workout`)}
               className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
               disabled={saving}
             >
               ביטול
-            </button>
-            <button
+                                </button>
+                                <button
               onClick={handleSave}
               disabled={saving}
               className="px-4 py-2 bg-primary text-white font-bold rounded-md hover:bg-primary-dark disabled:opacity-50"
             >
               {saving ? 'שומר...' : 'שמור שינויים'}
-            </button>
-          </div>
+                                </button>
+                              </div>
         </div>
       </div>
     </Layout>

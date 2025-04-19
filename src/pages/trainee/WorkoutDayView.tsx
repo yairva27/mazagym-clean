@@ -71,7 +71,7 @@ export const WorkoutDayView: React.FC = () => {
         const initialStatuses = day.exercises.map(exercise => {
           const status = {
             exerciseId: exercise.id,
-            completed: false,
+            completed: exercise.completed || false,
             actualWeight: exercise.actualWeight ?? exercise.weight,
             actualReps: exercise.actualReps ?? exercise.reps,
             notes: exercise.notes || ''
@@ -81,7 +81,8 @@ export const WorkoutDayView: React.FC = () => {
             exerciseId: exercise.id,
             exerciseName: exercise.name,
             plannedWeight: exercise.weight,
-            actualWeight: status.actualWeight
+            actualWeight: status.actualWeight,
+            completed: status.completed
           });
           
           return status;
@@ -177,7 +178,8 @@ export const WorkoutDayView: React.FC = () => {
                 originalWeight: exercise.weight,
                 previousActualWeight: exercise.actualWeight,
                 newActualWeight,
-                weightChanged
+                weightChanged,
+                completed: status.completed
               });
 
               // Only create weight history entry if weight actually changed
@@ -199,7 +201,10 @@ export const WorkoutDayView: React.FC = () => {
                 actualReps: status.actualReps ?? exercise.reps,
                 notes: status.notes || exercise.notes,
                 lastCompleted: now,
-                weightHistory
+                weightHistory,
+                // Update completion status
+                completed: status.completed,
+                completedAt: status.completed ? now : null
               };
 
               console.log('Final exercise update:', {
@@ -207,7 +212,9 @@ export const WorkoutDayView: React.FC = () => {
                 exerciseName: updatedExercise.name,
                 plannedWeight: updatedExercise.weight,
                 actualWeight: updatedExercise.actualWeight,
-                hasHistory: updatedExercise.weightHistory?.length > 0
+                hasHistory: updatedExercise.weightHistory?.length > 0,
+                completed: updatedExercise.completed,
+                completedAt: updatedExercise.completedAt
               });
 
               return updatedExercise;

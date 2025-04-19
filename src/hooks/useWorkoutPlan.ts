@@ -140,7 +140,9 @@ export const useWorkoutPlan = () => {
                       completed: perf.completed || false,
                       notes: perf.notes,
                       timestamp: new Date(perf.timestamp)
-                    }))
+                    })),
+                    completed: exercise.completed || false,
+                    completedAt: toTimestamp(exercise.completedAt)
                   };
                 }),
                 notes: day.notes || '',
