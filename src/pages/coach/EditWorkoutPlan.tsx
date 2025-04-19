@@ -1,60 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Layout } from '../../components/layout/Layout';
 import { useAuth } from '../../contexts/AuthContext';
-import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, addDoc, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase';
-
-interface Exercise {
-  id: string;
-  name: string;
-  sets: number;
-  reps: number;
-  weight: number;
-  notes: string;
-  restTime: number;
-}
-
-interface WorkoutDay {
-  id: string;
-  name: string;
-  exercises: Exercise[];
-}
-
-interface WorkoutPlan {
-  id: string;
-  name: string;
-  traineeId: string;
-  coachId: string;
-  isActive: boolean;
-  days: WorkoutDay[];
-  createdAt: Date;
-  updatedAt: Date;
-}
+import { WorkoutPlan, WorkoutDay, Exercise } from '../../types/workout';
 
 const EditWorkoutPlan: React.FC = () => {
   const { traineeId } = useParams<{ traineeId: string }>();
   const navigate = useNavigate();
   const { userData } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [workoutPlan, setWorkoutPlan] = useState<WorkoutPlan | null>(null);
-  const [selectedDay, setSelectedDay] = useState<WorkoutDay | null>(null);
-  const [newExercise, setNewExercise] = useState<Partial<Exercise>>({
-    name: '',
-    sets: 3,
-    reps: 10,
-    weight: 0,
-    notes: '',
-    restTime: 60,
-  });
 
   useEffect(() => {
     const fetchWorkoutPlan = async () => {
-      if (!traineeId || !userData?.uid) return;
+      if (!traineeId || !userData?.uid) {
+        setError('חסרים פרטים נדרשים');
+        setLoading(false);
+        return;
+      }
 
       try {
         setLoading(true);
+        setError(null);
         const workoutPlansRef = collection(db, 'workoutPlans');
         const q = query(
           workoutPlansRef,
@@ -73,15 +44,31 @@ const EditWorkoutPlan: React.FC = () => {
         const planDoc = querySnapshot.docs[0];
         const planData = planDoc.data();
         
+        // Ensure all required fields are present with proper defaults
         setWorkoutPlan({
           id: planDoc.id,
+          workoutPlanName: planData.workoutPlanName || planData.name || '',
           name: planData.name || '',
           traineeId: planData.traineeId,
           coachId: planData.coachId,
           isActive: planData.isActive,
-          days: planData.days || [],
-          createdAt: planData.createdAt?.toDate() || new Date(),
-          updatedAt: planData.updatedAt?.toDate() || new Date()
+          days: (planData.days || []).map((day: any) => ({
+            id: day.id || crypto.randomUUID(),
+            name: day.name || '',
+            exercises: (day.exercises || []).map((exercise: any) => ({
+              id: exercise.id || crypto.randomUUID(),
+              name: exercise.name || '',
+              sets: Number(exercise.sets) || 1,
+              reps: Number(exercise.reps) || 1,
+              weight: Number(exercise.weight) || 0,
+              notes: exercise.notes || '',
+              restTime: Number(exercise.restTime) || 60
+            })),
+            notes: day.notes || ''
+          })),
+          createdAt: planData.createdAt,
+          updatedAt: planData.updatedAt,
+          description: planData.description || ''
         });
 
       } catch (err) {
@@ -95,52 +82,186 @@ const EditWorkoutPlan: React.FC = () => {
     fetchWorkoutPlan();
   }, [traineeId, userData?.uid]);
 
-  const handleUpdatePlan = async () => {
-    if (!workoutPlan || !traineeId) return;
+  const handleAddDay = () => {
+    if (!workoutPlan) return;
+
+    const newDay: WorkoutDay = {
+      id: crypto.randomUUID(),
+      name: 'יום אימון חדש',
+      exercises: [],
+      notes: ''
+    };
+
+    setWorkoutPlan({
+      ...workoutPlan,
+      days: [...workoutPlan.days, newDay]
+    });
+  };
+
+  const handleDeleteDay = (dayId: string) => {
+    if (!workoutPlan) return;
+
+    setWorkoutPlan({
+      ...workoutPlan,
+      days: workoutPlan.days.filter(day => day.id !== dayId)
+    });
+  };
+
+  const handleAddExercise = (dayId: string) => {
+    if (!workoutPlan) return;
+
+    const newExercise: Exercise = {
+      id: crypto.randomUUID(),
+      name: 'תרגיל חדש',
+      sets: 3,
+      reps: 10,
+      weight: 0,
+      notes: '',
+      restTime: 60
+    };
+
+    setWorkoutPlan({
+      ...workoutPlan,
+      days: workoutPlan.days.map(day => {
+        if (day.id === dayId) {
+          return {
+            ...day,
+            exercises: [...day.exercises, newExercise]
+          };
+        }
+        return day;
+      })
+    });
+  };
+
+  const handleDeleteExercise = (dayId: string, exerciseId: string) => {
+    if (!workoutPlan) return;
+
+    setWorkoutPlan({
+      ...workoutPlan,
+      days: workoutPlan.days.map(day => {
+        if (day.id === dayId) {
+          return {
+            ...day,
+            exercises: day.exercises.filter(ex => ex.id !== exerciseId)
+          };
+        }
+        return day;
+      })
+    });
+  };
+
+  const validateWorkoutPlan = (plan: WorkoutPlan): boolean => {
+    if (!plan.workoutPlanName.trim()) {
+      setError('נדרש שם לתוכנית האימון');
+      return false;
+    }
+
+    if (!plan.days.length) {
+      setError('נדרש לפחות יום אימון אחד');
+      return false;
+    }
+
+    for (const day of plan.days) {
+      if (!day.name.trim()) {
+        setError('נדרש שם לכל יום אימון');
+        return false;
+      }
+
+      if (!day.exercises.length) {
+        setError('נדרש לפחות תרגיל אחד בכל יום אימון');
+        return false;
+      }
+
+      for (const exercise of day.exercises) {
+        if (!exercise.name.trim()) {
+          setError('נדרש שם לכל תרגיל');
+          return false;
+        }
+
+        if (exercise.sets < 1) {
+          setError('מספר הסטים חייב להיות גדול מ-0');
+          return false;
+        }
+
+        if (exercise.reps < 1) {
+          setError('מספר החזרות חייב להיות גדול מ-0');
+          return false;
+        }
+      }
+    }
+
+    return true;
+  };
+
+  const handleSave = async () => {
+    if (!workoutPlan || !workoutPlan.id) {
+      setError('לא נמצאה תוכנית אימון לעדכון');
+      return;
+    }
+
+    if (!validateWorkoutPlan(workoutPlan)) {
+      return;
+    }
 
     try {
+      setSaving(true);
+      setError(null);
       const planRef = doc(db, 'workoutPlans', workoutPlan.id);
-      await updateDoc(planRef, {
-        ...workoutPlan,
-        updatedAt: Timestamp.now()
-      });
       
-      navigate('/coach/dashboard');
+      // Create a clean update object without undefined values
+      const updates: Partial<WorkoutPlan> = {
+        workoutPlanName: workoutPlan.workoutPlanName,
+        name: workoutPlan.name,
+        days: workoutPlan.days.map(day => ({
+          id: day.id,
+          name: day.name.trim(),
+          exercises: day.exercises.map(exercise => ({
+            id: exercise.id,
+            name: exercise.name.trim(),
+            sets: Number(exercise.sets) || 1,
+            reps: Number(exercise.reps) || 1,
+            weight: Number(exercise.weight) || 0,
+            notes: exercise.notes?.trim() || '',
+            restTime: Number(exercise.restTime) || 60
+          })),
+          notes: day.notes?.trim() || ''
+        })),
+        updatedAt: Timestamp.now()
+      };
+
+      await updateDoc(planRef, updates);
+      navigate(`/coach/trainee/${traineeId}/workout`);
     } catch (err) {
       console.error('Error updating workout plan:', err);
       setError('שגיאה בעדכון תוכנית האימון');
+    } finally {
+      setSaving(false);
     }
   };
 
   if (loading) {
     return (
       <Layout>
-        <div className="flex justify-center items-center h-[calc(100vh-64px)]">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
-            <p className="mt-4">טוען תוכנית אימון...</p>
-          </div>
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
         </div>
       </Layout>
     );
   }
 
-  if (error) {
+  if (error || !workoutPlan) {
     return (
       <Layout>
-        <div className="container mx-auto px-4 py-8">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold mb-6">עריכת תוכנית אימון</h1>
-            <div className="bg-white shadow rounded-lg p-8 max-w-md mx-auto">
-              <p className="text-gray-600 mb-6">לא נמצאה תוכנית אימון למתאמן זה.</p>
-              <Link
-                to={`/coach/trainee/${traineeId}/create-plan`}
-                className="inline-block bg-primary text-white px-6 py-2 rounded-lg hover:bg-primary-dark transition-colors"
-              >
-                יצירת תוכנית אימון
-              </Link>
-            </div>
-          </div>
+        <div className="text-center text-red-500 p-4">{error || 'לא נמצאה תוכנית אימון'}</div>
+        <div className="text-center mt-4">
+          <button
+            onClick={() => navigate(`/coach/trainee/${traineeId}/workout`)}
+            className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded inline-flex items-center"
+          >
+            <span className="mr-2">←</span>
+            חזור
+          </button>
         </div>
       </Layout>
     );
@@ -149,175 +270,173 @@ const EditWorkoutPlan: React.FC = () => {
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8">
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">עריכת תוכנית אימון</h1>
           <button
-            onClick={() => navigate('/coach/dashboard')}
-            className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+            onClick={() => navigate(`/coach/trainee/${traineeId}/workout`)}
+            className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded inline-flex items-center"
           >
-            חזרה לדשבורד
+            <span className="mr-2">←</span>
+            חזור
           </button>
         </div>
 
-        {workoutPlan && (
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                שם התוכנית
-              </label>
-              <input
-                type="text"
-                value={workoutPlan.name}
-                onChange={(e) => setWorkoutPlan({ ...workoutPlan, name: e.target.value })}
-                className="w-full p-2 border rounded-lg"
-              />
-            </div>
-
-            <div className="space-y-6">
-              {workoutPlan.days.map((day, dayIndex) => (
-                <div key={day.id} className="border rounded-lg p-4">
-                  <div className="flex justify-between items-center mb-4">
-                    <input
-                      type="text"
-                      value={day.name}
-                      onChange={(e) => {
-                        const updatedDays = [...workoutPlan.days];
-                        updatedDays[dayIndex] = { ...day, name: e.target.value };
-                        setWorkoutPlan({ ...workoutPlan, days: updatedDays });
-                      }}
-                      className="text-lg font-medium p-2 border rounded"
-                    />
-                    <button
-                      onClick={() => {
-                        const updatedDays = workoutPlan.days.filter(d => d.id !== day.id);
-                        setWorkoutPlan({ ...workoutPlan, days: updatedDays });
-                      }}
-                      className="text-red-500 hover:text-red-600"
-                    >
-                      מחק יום
-                    </button>
-                  </div>
-
-                  <div className="space-y-4">
-                    {day.exercises.map((exercise, exerciseIndex) => (
-                      <div key={exercise.id} className="border rounded p-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              תרגיל
-                            </label>
-                            <input
-                              type="text"
-                              value={exercise.name}
-                              onChange={(e) => {
-                                const updatedDays = [...workoutPlan.days];
-                                updatedDays[dayIndex].exercises[exerciseIndex].name = e.target.value;
-                                setWorkoutPlan({ ...workoutPlan, days: updatedDays });
-                              }}
-                              className="w-full p-2 border rounded"
-                            />
-                          </div>
-                          <div className="grid grid-cols-3 gap-2">
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                סטים
-                              </label>
-                              <input
-                                type="number"
-                                value={exercise.sets}
-                                onChange={(e) => {
-                                  const updatedDays = [...workoutPlan.days];
-                                  updatedDays[dayIndex].exercises[exerciseIndex].sets = Number(e.target.value);
-                                  setWorkoutPlan({ ...workoutPlan, days: updatedDays });
-                                }}
-                                className="w-full p-2 border rounded"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                חזרות
-                              </label>
-                              <input
-                                type="number"
-                                value={exercise.reps}
-                                onChange={(e) => {
-                                  const updatedDays = [...workoutPlan.days];
-                                  updatedDays[dayIndex].exercises[exerciseIndex].reps = Number(e.target.value);
-                                  setWorkoutPlan({ ...workoutPlan, days: updatedDays });
-                                }}
-                                className="w-full p-2 border rounded"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                משקל
-                              </label>
-                              <input
-                                type="number"
-                                value={exercise.weight}
-                                onChange={(e) => {
-                                  const updatedDays = [...workoutPlan.days];
-                                  updatedDays[dayIndex].exercises[exerciseIndex].weight = Number(e.target.value);
-                                  setWorkoutPlan({ ...workoutPlan, days: updatedDays });
-                                }}
-                                className="w-full p-2 border rounded"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    <button
-                      onClick={() => {
-                        const updatedDays = [...workoutPlan.days];
-                        updatedDays[dayIndex].exercises.push({
-                          id: Date.now().toString(),
-                          name: 'תרגיל חדש',
-                          sets: 3,
-                          reps: 10,
-                          weight: 0,
-                          notes: '',
-                          restTime: 60
-                        });
-                        setWorkoutPlan({ ...workoutPlan, days: updatedDays });
-                      }}
-                      className="w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600"
-                    >
-                      הוסף תרגיל
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-6 flex justify-between">
-              <button
-                onClick={() => {
-                  setWorkoutPlan({
-                    ...workoutPlan,
-                    days: [
-                      ...workoutPlan.days,
-                      {
-                        id: Date.now().toString(),
-                        name: 'יום חדש',
-                        exercises: []
-                      }
-                    ]
-                  });
-                }}
-                className="bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600"
-              >
-                הוסף יום אימון
-              </button>
-              <button
-                onClick={handleUpdatePlan}
-                className="bg-blue-600 text-white py-2 px-6 rounded hover:bg-blue-700"
-              >
-                שמור שינויים
-              </button>
-            </div>
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            {error}
           </div>
         )}
+
+        <div className="space-y-6">
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">שם תוכנית האימון</label>
+            <input
+              type="text"
+              value={workoutPlan.workoutPlanName}
+              onChange={(e) => setWorkoutPlan({ ...workoutPlan, workoutPlanName: e.target.value })}
+              className="w-full p-2 border rounded"
+              placeholder="הכנס שם לתוכנית האימון"
+            />
+          </div>
+
+          {workoutPlan.days.map((day, dayIndex) => (
+            <div key={day.id} className="border rounded-lg p-4">
+              <div className="flex justify-between items-center mb-4">
+                <input
+                  type="text"
+                  value={day.name}
+                  onChange={(e) => {
+                    const updatedDays = [...workoutPlan.days];
+                    updatedDays[dayIndex] = { ...day, name: e.target.value };
+                    setWorkoutPlan({ ...workoutPlan, days: updatedDays });
+                  }}
+                  className="text-lg font-medium p-2 border rounded"
+                  placeholder="שם יום האימון"
+                />
+                <button
+                  onClick={() => handleDeleteDay(day.id)}
+                  className="text-red-500 hover:text-red-600"
+                >
+                  מחק יום
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {day.exercises.map((exercise, exerciseIndex) => (
+                  <div key={exercise.id} className="bg-gray-50 p-4 rounded">
+                    <div className="flex justify-between items-center mb-2">
+                      <input
+                        type="text"
+                        value={exercise.name}
+                        onChange={(e) => {
+                          const updatedDays = [...workoutPlan.days];
+                          updatedDays[dayIndex].exercises[exerciseIndex].name = e.target.value;
+                          setWorkoutPlan({ ...workoutPlan, days: updatedDays });
+                        }}
+                        className="font-medium p-2 border rounded"
+                        placeholder="שם התרגיל"
+                      />
+                      <button
+                        onClick={() => handleDeleteExercise(day.id, exercise.id)}
+                        className="text-red-500 hover:text-red-600"
+                      >
+                        מחק תרגיל
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">סטים</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={exercise.sets}
+                          onChange={(e) => {
+                            const updatedDays = [...workoutPlan.days];
+                            updatedDays[dayIndex].exercises[exerciseIndex].sets = parseInt(e.target.value) || 1;
+                            setWorkoutPlan({ ...workoutPlan, days: updatedDays });
+                          }}
+                          className="mt-1 block w-full p-2 border rounded"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">חזרות</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={exercise.reps}
+                          onChange={(e) => {
+                            const updatedDays = [...workoutPlan.days];
+                            updatedDays[dayIndex].exercises[exerciseIndex].reps = parseInt(e.target.value) || 1;
+                            setWorkoutPlan({ ...workoutPlan, days: updatedDays });
+                          }}
+                          className="mt-1 block w-full p-2 border rounded"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">משקל (ק"ג)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={exercise.weight}
+                          onChange={(e) => {
+                            const updatedDays = [...workoutPlan.days];
+                            updatedDays[dayIndex].exercises[exerciseIndex].weight = parseInt(e.target.value) || 0;
+                            setWorkoutPlan({ ...workoutPlan, days: updatedDays });
+                          }}
+                          className="mt-1 block w-full p-2 border rounded"
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-4">
+                      <label className="block text-sm font-medium text-gray-700">הערות</label>
+                      <textarea
+                        value={exercise.notes || ''}
+                        onChange={(e) => {
+                          const updatedDays = [...workoutPlan.days];
+                          updatedDays[dayIndex].exercises[exerciseIndex].notes = e.target.value;
+                          setWorkoutPlan({ ...workoutPlan, days: updatedDays });
+                        }}
+                        className="mt-1 block w-full p-2 border rounded"
+                        rows={2}
+                        placeholder="הוסף הערות לתרגיל"
+                      />
+                    </div>
+                  </div>
+                ))}
+                <button
+                  onClick={() => handleAddExercise(day.id)}
+                  className="w-full bg-blue-50 hover:bg-blue-100 text-blue-600 font-semibold py-2 px-4 rounded"
+                >
+                  הוסף תרגיל
+                </button>
+              </div>
+            </div>
+          ))}
+
+          <button
+            onClick={handleAddDay}
+            className="w-full bg-blue-50 hover:bg-blue-100 text-blue-600 font-semibold py-2 px-4 rounded"
+          >
+            הוסף יום אימון
+          </button>
+
+          <div className="mt-6 flex justify-end space-x-4">
+            <button
+              onClick={() => navigate(`/coach/trainee/${traineeId}/workout`)}
+              className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+              disabled={saving}
+            >
+              ביטול
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="px-4 py-2 bg-primary text-white font-bold rounded-md hover:bg-primary-dark disabled:opacity-50"
+            >
+              {saving ? 'שומר...' : 'שמור שינויים'}
+            </button>
+          </div>
+        </div>
       </div>
     </Layout>
   );

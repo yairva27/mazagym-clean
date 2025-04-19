@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Layout } from '../../components/layout/Layout';
 import { useCoachWorkoutPlans } from '../../hooks/useCoachWorkoutPlans';
 import { WorkoutPlanDisplay } from '../../components/workout/WorkoutPlanDisplay';
@@ -7,6 +7,7 @@ import { WorkoutPlan } from '../../types/workout';
 
 export const ViewTraineeWorkout: React.FC = () => {
   const { traineeId } = useParams<{ traineeId: string }>();
+  const navigate = useNavigate();
   const { workoutPlans, loading, error } = useCoachWorkoutPlans(traineeId || '');
   const [activePlan, setActivePlan] = useState<WorkoutPlan | null>(null);
 
@@ -33,6 +34,15 @@ export const ViewTraineeWorkout: React.FC = () => {
     return (
       <Layout>
         <div className="text-center text-red-500 p-4">{error}</div>
+        <div className="text-center mt-4">
+          <button
+            onClick={() => navigate(-1)}
+            className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded inline-flex items-center"
+          >
+            <span className="mr-2">←</span>
+            חזור
+          </button>
+        </div>
       </Layout>
     );
   }
@@ -41,17 +51,24 @@ export const ViewTraineeWorkout: React.FC = () => {
     return (
       <Layout>
         <div className="container mx-auto px-4 py-8">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold mb-6">תוכנית אימון למתאמן</h1>
-            <div className="bg-white shadow rounded-lg p-8 max-w-md mx-auto">
-              <p className="text-gray-600 mb-6">לא נמצאה תוכנית אימון למתאמן זה.</p>
-              <Link
-                to={`/coach/trainee/${traineeId}/create-plan`}
-                className="inline-block bg-primary text-white px-6 py-2 rounded-lg hover:bg-primary-dark transition-colors"
-              >
-                יצירת תוכנית אימון
-              </Link>
-            </div>
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-bold">תוכנית אימון למתאמן</h1>
+            <button
+              onClick={() => navigate(-1)}
+              className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded inline-flex items-center"
+            >
+              <span className="mr-2">←</span>
+              חזור
+            </button>
+          </div>
+          <div className="text-center text-gray-600 p-8">
+            <p>לא נמצאה תוכנית אימון פעילה למתאמן זה.</p>
+            <button
+              onClick={() => navigate(`/coach/trainee/${traineeId}/create-plan`)}
+              className="mt-4 bg-primary text-white px-6 py-2 rounded hover:bg-primary-dark"
+            >
+              צור תוכנית אימון חדשה
+            </button>
           </div>
         </div>
       </Layout>
@@ -61,7 +78,16 @@ export const ViewTraineeWorkout: React.FC = () => {
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold mb-6">תוכנית אימון למתאמן</h1>
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">תוכנית אימון למתאמן</h1>
+          <button
+            onClick={() => navigate(-1)}
+            className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded inline-flex items-center"
+          >
+            <span className="mr-2">←</span>
+            חזור
+          </button>
+        </div>
         <WorkoutPlanDisplay workoutPlan={activePlan} />
       </div>
     </Layout>

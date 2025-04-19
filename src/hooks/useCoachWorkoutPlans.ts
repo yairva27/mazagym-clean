@@ -8,6 +8,7 @@ import {
   setDoc, 
   deleteDoc, 
   updateDoc,
+  orderBy,
   Timestamp 
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -18,7 +19,7 @@ interface UseCoachWorkoutPlansReturn {
   workoutPlans: WorkoutPlan[];
   loading: boolean;
   error: string | null;
-  createWorkoutPlan: (name: string, description?: string) => Promise<string>;
+  createWorkoutPlan: (plan: Omit<WorkoutPlan, 'id' | 'createdAt' | 'updatedAt'>) => Promise<WorkoutPlan>;
   updateWorkoutPlan: (planId: string, updates: Partial<WorkoutPlan>) => Promise<void>;
   deleteWorkoutPlan: (planId: string) => Promise<void>;
   setActivePlan: (planId: string) => Promise<void>;
@@ -37,117 +38,137 @@ export const useCoachWorkoutPlans = (traineeId: string): UseCoachWorkoutPlansRet
   const { userData } = useAuth();
 
   useEffect(() => {
+    if (!userData?.uid) return;
+
     const fetchWorkoutPlans = async () => {
       try {
+        setLoading(true);
         const q = query(
           collection(db, 'workoutPlans'),
-          where('traineeId', '==', traineeId)
+          where('coachId', '==', userData.uid),
+          orderBy('createdAt', 'desc')
         );
+
         const querySnapshot = await getDocs(q);
         const plans: WorkoutPlan[] = [];
+        
         querySnapshot.forEach((doc) => {
           const data = doc.data();
           plans.push({
-            ...data,
             id: doc.id,
-            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt),
-            updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : new Date(data.updatedAt)
-          } as WorkoutPlan);
+            workoutPlanName: data.workoutPlanName,
+            description: data.description || '',
+            days: (data.days || []).map((day: any): WorkoutDay => ({
+              id: day.id || crypto.randomUUID(),
+              name: day.name || day.dayName,
+              exercises: day.exercises.map((exercise: any) => ({
+                id: exercise.id || crypto.randomUUID(),
+                name: exercise.name,
+                sets: exercise.sets,
+                reps: exercise.reps,
+                weight: exercise.weight,
+                notes: exercise.notes,
+                restTime: exercise.restTime
+              })),
+              notes: day.notes,
+              lastCompleted: day.lastCompleted
+            })),
+            isActive: data.isActive || false,
+            traineeId: data.traineeId || '',
+            coachId: data.coachId,
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt
+          });
         });
+
         setWorkoutPlans(plans);
         setError(null);
       } catch (err) {
-        setError('Failed to fetch workout plans');
         console.error('Error fetching workout plans:', err);
+        setError('שגיאה בטעינת תוכניות האימון');
       } finally {
         setLoading(false);
       }
     };
 
-    if (traineeId) {
-      fetchWorkoutPlans();
-    }
-  }, [traineeId]);
+    fetchWorkoutPlans();
+  }, [userData?.uid]);
 
-  const createWorkoutPlan = async (name: string, description?: string): Promise<string> => {
+  const createWorkoutPlan = async (plan: Omit<WorkoutPlan, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
-      if (!userData?.uid) {
-        throw new Error('Coach ID not found');
-      }
-
-      const now = Timestamp.now().toDate();
-      const newPlan: Omit<WorkoutPlan, 'id'> = {
-        traineeId,
-        coachId: userData.uid,
-        name,
-        description,
-        isActive: false,
-        days: [],
+      setLoading(true);
+      const newPlanRef = doc(collection(db, 'workoutPlans'));
+      const now = Timestamp.now();
+      
+      const newPlan: WorkoutPlan = {
+        ...plan,
+        id: newPlanRef.id,
         createdAt: now,
         updatedAt: now
       };
 
-      const docRef = doc(collection(db, 'workoutPlans'));
-      await setDoc(docRef, {
-        ...newPlan,
-        createdAt: Timestamp.fromDate(now),
-        updatedAt: Timestamp.fromDate(now)
+      await setDoc(newPlanRef, newPlan);
+      setWorkoutPlans(prev => [newPlan, ...prev]);
+      setError(null);
+      return newPlan;
+    } catch (err) {
+      console.error('Error creating workout plan:', err);
+      setError('שגיאה ביצירת תוכנית אימון');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateWorkoutPlan = async (planId: string, updates: Partial<WorkoutPlan>) => {
+    try {
+      setLoading(true);
+      const planRef = doc(db, 'workoutPlans', planId);
+      const now = Timestamp.now();
+      
+      await updateDoc(planRef, {
+        ...updates,
+        updatedAt: now
       });
 
-      const createdPlan = { id: docRef.id, ...newPlan };
-      setWorkoutPlans(prev => [...prev, createdPlan]);
-      setError(null);
-      return docRef.id;
-    } catch (err) {
-      setError('Failed to create workout plan');
-      console.error('Error creating workout plan:', err);
-      throw err;
-    }
-  };
-
-  const updateWorkoutPlan = async (planId: string, updates: Partial<WorkoutPlan>): Promise<void> => {
-    try {
-      const now = Timestamp.now().toDate();
-      const planRef = doc(db, 'workoutPlans', planId);
-      const updatedPlan = {
-        ...updates,
-        updatedAt: Timestamp.fromDate(now)
-      };
-      await updateDoc(planRef, updatedPlan);
-      
-      setWorkoutPlans(prev =>
-        prev.map(plan =>
-          plan.id === planId ? { ...plan, ...updates, updatedAt: now } : plan
-        )
-      );
+      setWorkoutPlans(prev => prev.map(plan => 
+        plan.id === planId 
+          ? { ...plan, ...updates, updatedAt: now }
+          : plan
+      ));
       setError(null);
     } catch (err) {
-      setError('Failed to update workout plan');
       console.error('Error updating workout plan:', err);
+      setError('שגיאה בעדכון תוכנית אימון');
       throw err;
+    } finally {
+      setLoading(false);
     }
   };
 
-  const deleteWorkoutPlan = async (planId: string): Promise<void> => {
+  const deleteWorkoutPlan = async (planId: string) => {
     try {
+      setLoading(true);
       await deleteDoc(doc(db, 'workoutPlans', planId));
       setWorkoutPlans(prev => prev.filter(plan => plan.id !== planId));
       setError(null);
     } catch (err) {
-      setError('Failed to delete workout plan');
       console.error('Error deleting workout plan:', err);
+      setError('שגיאה במחיקת תוכנית אימון');
       throw err;
+    } finally {
+      setLoading(false);
     }
   };
 
   const setActivePlan = async (planId: string): Promise<void> => {
     try {
-      const now = Timestamp.now().toDate();
+      const now = Timestamp.now();
       // First, deactivate all plans
       const inactiveUpdates = workoutPlans.map(plan =>
-        updateDoc(doc(db, 'workoutPlans', plan.id), {
+        updateDoc(doc(db, 'workoutPlans', plan.id!), {
           isActive: false,
-          updatedAt: Timestamp.fromDate(now)
+          updatedAt: now
         })
       );
       await Promise.all(inactiveUpdates);
@@ -155,7 +176,7 @@ export const useCoachWorkoutPlans = (traineeId: string): UseCoachWorkoutPlansRet
       // Then activate the selected plan
       await updateDoc(doc(db, 'workoutPlans', planId), {
         isActive: true,
-        updatedAt: Timestamp.fromDate(now)
+        updatedAt: now
       });
 
       setWorkoutPlans(prev =>

@@ -27,14 +27,15 @@ export interface WorkoutDay {
 }
 
 export interface WorkoutPlan {
-  id: string;
+  id?: string;
   traineeId: string;
-  coachId: string;
-  name: string;
+  coachId?: string;
+  workoutPlanName: string;
+  name?: string; // For backward compatibility
   description?: string;
   days: WorkoutDay[];
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Date | any; // Allow Firestore Timestamp
+  updatedAt?: Date | any; // Allow Firestore Timestamp
   isActive: boolean;
-  lastWorkoutDate?: Date;
+  lastWorkoutDate?: Date | any; // Allow Firestore Timestamp
 } 
