@@ -5,6 +5,7 @@ import { ExerciseNotes } from './ExerciseNotes';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Timestamp } from 'firebase/firestore';
+import { Exercise } from '../../types/workout';
 
 interface WorkoutPlanDisplayProps {
   workoutPlan: WorkoutPlan;
@@ -14,6 +15,18 @@ export const WorkoutPlanDisplay: React.FC<WorkoutPlanDisplayProps> = ({ workoutP
   const { userData } = useAuth();
   const navigate = useNavigate();
   const isTrainee = userData?.role === 'trainee';
+
+  console.log('Rendering WorkoutPlanDisplay:', {
+    planId: workoutPlan.id,
+    daysCount: workoutPlan.days.length,
+    exercises: workoutPlan.days.flatMap(d => d.exercises.map(e => ({
+      id: e.id,
+      name: e.name,
+      weight: e.weight,
+      actualWeight: e.actualWeight,
+      hasHistory: e.weightHistory && e.weightHistory.length > 0
+    })))
+  });
 
   const formatDate = (date: Date | Timestamp | { seconds: number; nanoseconds: number } | undefined | null) => {
     if (!date) return null;
@@ -56,6 +69,37 @@ export const WorkoutPlanDisplay: React.FC<WorkoutPlanDisplayProps> = ({ workoutP
     return `${minutes} דקות ${remainingSeconds} שניות`;
   };
 
+  const handleDayClick = (dayId: string) => {
+    if (isTrainee) {
+      navigate(`/trainee/workout/${dayId}`);
+    }
+  };
+
+  const getDisplayWeight = (exercise: Exercise) => {
+    // For trainees, prefer actual weight if available
+    const actualWeight = exercise.actualWeight ?? exercise.weight;
+    console.log('Getting display weight:', {
+      exerciseId: exercise.id,
+      exerciseName: exercise.name,
+      plannedWeight: exercise.weight,
+      actualWeight: exercise.actualWeight,
+      displayWeight: actualWeight,
+      isActual: exercise.actualWeight !== undefined
+    });
+
+    if (isTrainee && exercise.actualWeight !== undefined) {
+      return {
+        weight: actualWeight,
+        isActual: true
+      };
+    }
+    // Fallback to planned weight
+    return {
+      weight: exercise.weight,
+      isActual: false
+    };
+  };
+
   return (
     <div className="space-y-6">
       {/* Back Button */}
@@ -91,35 +135,81 @@ export const WorkoutPlanDisplay: React.FC<WorkoutPlanDisplayProps> = ({ workoutP
       {/* Workout Days */}
       <div className="space-y-6">
         {workoutPlan.days.map((day, index) => (
-          <div key={day.id || index} className="border rounded-lg p-4">
+          <div 
+            key={day.id || index} 
+            className={`border rounded-lg p-4 ${isTrainee ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+            onClick={() => isTrainee && day.id && handleDayClick(day.id)}
+          >
             <h3 className="text-xl font-semibold mb-3">{day.name}</h3>
             <div className="space-y-4">
-              {day.exercises.map((exercise, exerciseIndex) => (
-                <div key={exercise.id || exerciseIndex} className="bg-gray-50 p-4 rounded">
-                  <h4 className="font-medium">{exercise.name}</h4>
-                  <div className="mt-2 grid grid-cols-3 gap-4 text-sm text-gray-600">
-                    <div>
-                      <span className="font-medium">סטים:</span> {exercise.sets}
-                    </div>
-                    <div>
-                      <span className="font-medium">חזרות:</span> {exercise.reps}
-                    </div>
-                    {exercise.weight !== undefined && exercise.weight >= 0 && (
+              {day.exercises.map((exercise, exerciseIndex) => {
+                const displayWeight = getDisplayWeight(exercise);
+                console.log('Rendering exercise:', {
+                  exerciseId: exercise.id,
+                  name: exercise.name,
+                  plannedWeight: exercise.weight,
+                  actualWeight: exercise.actualWeight,
+                  displayWeight,
+                  hasHistory: exercise.weightHistory && exercise.weightHistory.length > 0
+                });
+
+                return (
+                  <div key={exercise.id || exerciseIndex} className="bg-gray-50 p-4 rounded">
+                    <h4 className="font-medium">{exercise.name}</h4>
+                    <div className="mt-2 grid grid-cols-3 gap-4 text-sm text-gray-600">
                       <div>
-                        <span className="font-medium">משקל:</span> {exercise.weight} ק"ג
+                        <span className="font-medium">סטים:</span> {exercise.sets}
+                      </div>
+                      <div>
+                        <span className="font-medium">חזרות:</span> {exercise.reps}
+                      </div>
+                      <div>
+                        {displayWeight.isActual ? (
+                          <>
+                            <div>
+                              <span className="font-medium">משקל בפועל:</span>{' '}
+                              <span className="text-blue-600">{displayWeight.weight} ק"ג</span>
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              <span className="font-medium">משקל מתוכנן:</span> {exercise.weight} ק"ג
+                            </div>
+                          </>
+                        ) : (
+                          <div>
+                            <span className="font-medium">משקל מתוכנן:</span> {displayWeight.weight} ק"ג
+                          </div>
+                        )}
+                        {exercise.lastCompleted && displayWeight.isActual && (
+                          <div className="text-xs text-gray-500">
+                            עודכן: {formatDate(exercise.lastCompleted)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {exercise.notes && (
+                      <p className="mt-2 text-sm text-gray-500">{exercise.notes}</p>
+                    )}
+                    {exercise.restTime && (
+                      <p className="mt-2 text-sm text-gray-500">
+                        <span className="font-medium">זמן מנוחה:</span> {formatRestTime(exercise.restTime)}
+                      </p>
+                    )}
+                    {exercise.weightHistory && exercise.weightHistory.length > 0 && (
+                      <div className="mt-2 text-sm text-gray-500">
+                        <span className="font-medium">היסטוריית משקלים:</span>
+                        <div className="mt-1 space-y-1">
+                          {exercise.weightHistory.slice(-3).map((history, i) => (
+                            <div key={i} className="flex justify-between">
+                              <span>{history.weight} ק"ג</span>
+                              <span>{formatDate(history.timestamp)}</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
-                  {exercise.notes && (
-                    <p className="mt-2 text-sm text-gray-500">{exercise.notes}</p>
-                  )}
-                  {exercise.restTime && (
-                    <p className="mt-2 text-sm text-gray-500">
-                      <span className="font-medium">זמן מנוחה:</span> {formatRestTime(exercise.restTime)}
-                    </p>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ))}

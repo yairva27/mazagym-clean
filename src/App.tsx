@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Suspense } from 'react';
 import { AuthProvider, UserData, useAuth } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
@@ -15,6 +15,7 @@ import ViewTraineeWorkout from './pages/coach/ViewTraineeWorkout';
 import CreateWorkoutPlan from './pages/coach/CreateWorkoutPlan';
 import EditWorkoutPlan from './pages/coach/EditWorkoutPlan';
 import { TraineeDashboard } from './pages/trainee/TraineeDashboard';
+import { WorkoutDayView } from './pages/trainee/WorkoutDayView';
 
 function App() {
   return (
@@ -76,6 +77,14 @@ function App() {
                 element={
                   <ProtectedRoute allowedRoles={['trainee']}>
                     <TraineeDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/trainee/workout/:dayId"
+                element={
+                  <ProtectedRoute allowedRoles={['trainee']}>
+                    <WorkoutDayView />
                   </ProtectedRoute>
                 }
               />

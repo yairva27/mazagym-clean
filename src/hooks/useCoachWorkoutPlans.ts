@@ -9,22 +9,26 @@ import {
   deleteDoc, 
   updateDoc,
   orderBy,
-  Timestamp 
+  Timestamp,
+  getDoc,
+  serverTimestamp,
+  DocumentReference
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { WorkoutPlan, WorkoutDay, Exercise } from '../types/workout';
 import { useAuth } from '../contexts/AuthContext';
+import { v4 as uuidv4 } from 'uuid';
 
 interface UseCoachWorkoutPlansReturn {
   workoutPlans: WorkoutPlan[];
   loading: boolean;
   error: string | null;
   createWorkoutPlan: (plan: Omit<WorkoutPlan, 'id' | 'createdAt' | 'updatedAt'>) => Promise<WorkoutPlan>;
-  updateWorkoutPlan: (planId: string, updates: Partial<WorkoutPlan>) => Promise<void>;
+  updateWorkoutPlan: (planId: string, updates: Partial<Omit<WorkoutPlan, 'id'>>) => Promise<void>;
   deleteWorkoutPlan: (planId: string) => Promise<void>;
   setActivePlan: (planId: string) => Promise<void>;
-  addWorkoutDay: (planId: string, name: string) => Promise<void>;
-  updateWorkoutDay: (planId: string, dayId: string, updates: Partial<WorkoutDay>) => Promise<void>;
+  addWorkoutDay: (workoutPlanId: string, name: string) => Promise<WorkoutDay>;
+  updateWorkoutDay: (planId: string, dayId: string, updates: Partial<Omit<WorkoutDay, 'id'>>) => Promise<void>;
   deleteWorkoutDay: (planId: string, dayId: string) => Promise<void>;
   addExercise: (planId: string, dayId: string, exercise: Omit<Exercise, 'id'>) => Promise<void>;
   updateExercise: (planId: string, dayId: string, exercise: Exercise) => Promise<void>;
@@ -59,10 +63,10 @@ export const useCoachWorkoutPlans = (traineeId: string): UseCoachWorkoutPlansRet
             workoutPlanName: data.workoutPlanName,
             description: data.description || '',
             days: (data.days || []).map((day: any): WorkoutDay => ({
-              id: day.id || crypto.randomUUID(),
-              name: day.name || day.dayName,
-              exercises: day.exercises.map((exercise: any) => ({
-                id: exercise.id || crypto.randomUUID(),
+              id: day.id || uuidv4(),
+              name: day.name,
+              exercises: day.exercises.map((exercise: any): Exercise => ({
+                id: exercise.id || uuidv4(),
                 name: exercise.name,
                 sets: exercise.sets,
                 reps: exercise.reps,
@@ -70,8 +74,7 @@ export const useCoachWorkoutPlans = (traineeId: string): UseCoachWorkoutPlansRet
                 notes: exercise.notes,
                 restTime: exercise.restTime
               })),
-              notes: day.notes,
-              lastCompleted: day.lastCompleted
+              notes: day.notes || ''
             })),
             isActive: data.isActive || false,
             traineeId: data.traineeId || '',
@@ -94,7 +97,7 @@ export const useCoachWorkoutPlans = (traineeId: string): UseCoachWorkoutPlansRet
     fetchWorkoutPlans();
   }, [userData?.uid]);
 
-  const createWorkoutPlan = async (plan: Omit<WorkoutPlan, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const createWorkoutPlan = async (plan: Omit<WorkoutPlan, 'id' | 'createdAt' | 'updatedAt'>): Promise<WorkoutPlan> => {
     try {
       setLoading(true);
       const newPlanRef = doc(collection(db, 'workoutPlans'));
@@ -107,7 +110,12 @@ export const useCoachWorkoutPlans = (traineeId: string): UseCoachWorkoutPlansRet
         updatedAt: now
       };
 
-      await setDoc(newPlanRef, newPlan);
+      await setDoc(newPlanRef, {
+        ...newPlan,
+        createdAt: now,
+        updatedAt: now
+      });
+
       setWorkoutPlans(prev => [newPlan, ...prev]);
       setError(null);
       return newPlan;
@@ -120,10 +128,10 @@ export const useCoachWorkoutPlans = (traineeId: string): UseCoachWorkoutPlansRet
     }
   };
 
-  const updateWorkoutPlan = async (planId: string, updates: Partial<WorkoutPlan>) => {
+  const updateWorkoutPlan = async (planId: string, updates: Partial<Omit<WorkoutPlan, 'id'>>): Promise<void> => {
     try {
       setLoading(true);
-      const planRef = doc(db, 'workoutPlans', planId);
+      const planRef = doc(db, 'workoutPlans', planId) as DocumentReference<WorkoutPlan>;
       const now = Timestamp.now();
       
       await updateDoc(planRef, {
@@ -146,7 +154,7 @@ export const useCoachWorkoutPlans = (traineeId: string): UseCoachWorkoutPlansRet
     }
   };
 
-  const deleteWorkoutPlan = async (planId: string) => {
+  const deleteWorkoutPlan = async (planId: string): Promise<void> => {
     try {
       setLoading(true);
       await deleteDoc(doc(db, 'workoutPlans', planId));
@@ -166,7 +174,7 @@ export const useCoachWorkoutPlans = (traineeId: string): UseCoachWorkoutPlansRet
       const now = Timestamp.now();
       // First, deactivate all plans
       const inactiveUpdates = workoutPlans.map(plan =>
-        updateDoc(doc(db, 'workoutPlans', plan.id!), {
+        updateDoc(doc(db, 'workoutPlans', plan.id!) as DocumentReference<WorkoutPlan>, {
           isActive: false,
           updatedAt: now
         })
@@ -174,7 +182,7 @@ export const useCoachWorkoutPlans = (traineeId: string): UseCoachWorkoutPlansRet
       await Promise.all(inactiveUpdates);
 
       // Then activate the selected plan
-      await updateDoc(doc(db, 'workoutPlans', planId), {
+      await updateDoc(doc(db, 'workoutPlans', planId) as DocumentReference<WorkoutPlan>, {
         isActive: true,
         updatedAt: now
       });
@@ -189,48 +197,53 @@ export const useCoachWorkoutPlans = (traineeId: string): UseCoachWorkoutPlansRet
       setError(null);
     } catch (err) {
       setError('Failed to set active plan');
-      console.error('Error setting active plan:', err);
       throw err;
     }
   };
 
-  const addWorkoutDay = async (planId: string, name: string): Promise<void> => {
+  const addWorkoutDay = async (workoutPlanId: string, name: string): Promise<WorkoutDay> => {
     try {
-      const plan = workoutPlans.find(p => p.id === planId);
-      if (!plan) throw new Error('Plan not found');
-
       const newDay: WorkoutDay = {
-        id: crypto.randomUUID(),
+        id: uuidv4(),
         name,
-        exercises: []
+        exercises: [],
+        notes: ''
       };
 
-      const now = Timestamp.now().toDate();
-      const updatedDays = [...plan.days, newDay];
-      const planRef = doc(db, 'workoutPlans', planId);
-      
-      await updateDoc(planRef, {
+      const workoutPlanRef = doc(db, 'workoutPlans', workoutPlanId) as DocumentReference<WorkoutPlan>;
+      const workoutPlanDoc = await getDoc(workoutPlanRef);
+
+      if (!workoutPlanDoc.exists()) {
+        throw new Error('Workout plan not found');
+      }
+
+      const workoutPlan = workoutPlanDoc.data() as WorkoutPlan;
+      const updatedDays = [...(workoutPlan.days || []), newDay];
+
+      await updateDoc(workoutPlanRef, {
         days: updatedDays,
-        updatedAt: Timestamp.fromDate(now)
+        updatedAt: serverTimestamp()
       });
 
-      setWorkoutPlans(prev =>
-        prev.map(plan =>
-          plan.id === planId ? { ...plan, days: updatedDays, updatedAt: now } : plan
+      setWorkoutPlans(prevPlans =>
+        prevPlans.map(plan =>
+          plan.id === workoutPlanId
+            ? { ...plan, days: updatedDays }
+            : plan
         )
       );
-      setError(null);
-    } catch (err) {
-      setError('Failed to add workout day');
-      console.error('Error adding workout day:', err);
-      throw err;
+
+      return newDay;
+    } catch (error) {
+      console.error('Error adding workout day:', error);
+      throw error;
     }
   };
 
   const updateWorkoutDay = async (
     planId: string,
     dayId: string,
-    updates: Partial<WorkoutDay>
+    updates: Partial<Omit<WorkoutDay, 'id'>>
   ): Promise<void> => {
     try {
       const plan = workoutPlans.find(p => p.id === planId);
@@ -240,11 +253,11 @@ export const useCoachWorkoutPlans = (traineeId: string): UseCoachWorkoutPlansRet
         day.id === dayId ? { ...day, ...updates } : day
       );
 
-      const now = Timestamp.now().toDate();
-      const planRef = doc(db, 'workoutPlans', planId);
+      const now = Timestamp.now();
+      const planRef = doc(db, 'workoutPlans', planId) as DocumentReference<WorkoutPlan>;
       await updateDoc(planRef, {
         days: updatedDays,
-        updatedAt: Timestamp.fromDate(now)
+        updatedAt: now
       });
 
       setWorkoutPlans(prev =>
@@ -266,12 +279,12 @@ export const useCoachWorkoutPlans = (traineeId: string): UseCoachWorkoutPlansRet
       if (!plan) throw new Error('Plan not found');
 
       const updatedDays = plan.days.filter(day => day.id !== dayId);
-      const now = Timestamp.now().toDate();
-      const planRef = doc(db, 'workoutPlans', planId);
+      const now = Timestamp.now();
+      const planRef = doc(db, 'workoutPlans', planId) as DocumentReference<WorkoutPlan>;
       
       await updateDoc(planRef, {
         days: updatedDays,
-        updatedAt: Timestamp.fromDate(now)
+        updatedAt: now
       });
 
       setWorkoutPlans(prev =>
@@ -298,7 +311,7 @@ export const useCoachWorkoutPlans = (traineeId: string): UseCoachWorkoutPlansRet
 
       const newExercise: Exercise = {
         ...exercise,
-        id: crypto.randomUUID()
+        id: uuidv4()
       };
 
       const updatedDays = plan.days.map(day =>
@@ -307,11 +320,11 @@ export const useCoachWorkoutPlans = (traineeId: string): UseCoachWorkoutPlansRet
           : day
       );
 
-      const now = Timestamp.now().toDate();
-      const planRef = doc(db, 'workoutPlans', planId);
+      const now = Timestamp.now();
+      const planRef = doc(db, 'workoutPlans', planId) as DocumentReference<WorkoutPlan>;
       await updateDoc(planRef, {
         days: updatedDays,
-        updatedAt: Timestamp.fromDate(now)
+        updatedAt: now
       });
 
       setWorkoutPlans(prev =>
@@ -347,11 +360,11 @@ export const useCoachWorkoutPlans = (traineeId: string): UseCoachWorkoutPlansRet
           : day
       );
 
-      const now = Timestamp.now().toDate();
-      const planRef = doc(db, 'workoutPlans', planId);
+      const now = Timestamp.now();
+      const planRef = doc(db, 'workoutPlans', planId) as DocumentReference<WorkoutPlan>;
       await updateDoc(planRef, {
         days: updatedDays,
-        updatedAt: Timestamp.fromDate(now)
+        updatedAt: now
       });
 
       setWorkoutPlans(prev =>
@@ -385,11 +398,11 @@ export const useCoachWorkoutPlans = (traineeId: string): UseCoachWorkoutPlansRet
           : day
       );
 
-      const now = Timestamp.now().toDate();
-      const planRef = doc(db, 'workoutPlans', planId);
+      const now = Timestamp.now();
+      const planRef = doc(db, 'workoutPlans', planId) as DocumentReference<WorkoutPlan>;
       await updateDoc(planRef, {
         days: updatedDays,
-        updatedAt: Timestamp.fromDate(now)
+        updatedAt: now
       });
 
       setWorkoutPlans(prev =>

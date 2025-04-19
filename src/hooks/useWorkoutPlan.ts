@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { WorkoutPlan } from '../types/workout';
+import { WorkoutPlan, Exercise } from '../types/workout';
 import { useAuth } from '../contexts/AuthContext';
 
 export const useWorkoutPlan = () => {
@@ -69,6 +69,22 @@ export const useWorkoutPlan = () => {
             daysCount: planData.days?.length,
             firstDayExercises: planData.days?.[0]?.exercises?.length
           });
+
+          // Helper function to convert to Timestamp
+          const toTimestamp = (date: any): Timestamp | undefined => {
+            if (!date) return undefined;
+            if (date instanceof Timestamp) return date;
+            if (date instanceof Date) return Timestamp.fromDate(date);
+            if (typeof date === 'object' && 'seconds' in date && 'nanoseconds' in date) {
+              return new Timestamp(date.seconds, date.nanoseconds);
+            }
+            try {
+              return Timestamp.fromDate(new Date(date));
+            } catch (err) {
+              console.error('Error converting date:', err, date);
+              return undefined;
+            }
+          };
           
           // Convert Firestore Timestamps to JavaScript Date objects
           const workoutPlan: WorkoutPlan = {
@@ -79,42 +95,58 @@ export const useWorkoutPlan = () => {
             name: planData.name || planData.workoutPlanName, // For backward compatibility
             description: planData.description || '',
             isActive: planData.isActive || false,
-            createdAt: planData.createdAt instanceof Timestamp 
-              ? planData.createdAt.toDate() 
-              : new Date(planData.createdAt),
-            updatedAt: planData.updatedAt instanceof Timestamp 
-              ? planData.updatedAt.toDate() 
-              : new Date(planData.updatedAt),
-            lastWorkoutDate: planData.lastWorkoutDate instanceof Timestamp 
-              ? planData.lastWorkoutDate.toDate() 
-              : planData.lastWorkoutDate ? new Date(planData.lastWorkoutDate) : undefined,
-            days: (planData.days || []).map((day: any) => ({
-              id: day.id || crypto.randomUUID(),
-              name: day.name || day.dayName || 'Untitled Day',
-              exercises: (day.exercises || []).map((exercise: any) => ({
-                id: exercise.id || crypto.randomUUID(),
-                name: exercise.name || '',
-                sets: exercise.sets || 0,
-                reps: exercise.reps || 0,
-                weight: exercise.weight,
-                notes: exercise.notes,
-                restTime: exercise.restTime,
-                performance: exercise.performance?.map((perf: any) => ({
-                  setNumber: perf.setNumber || 1,
-                  weight: perf.weight,
-                  reps: perf.reps,
-                  completed: perf.completed || false,
-                  notes: perf.notes,
-                  timestamp: perf.timestamp instanceof Timestamp 
-                    ? perf.timestamp.toDate() 
-                    : new Date(perf.timestamp)
-                }))
-              })),
-              notes: day.notes,
-              lastCompleted: day.lastCompleted instanceof Timestamp 
-                ? day.lastCompleted.toDate() 
-                : day.lastCompleted ? new Date(day.lastCompleted) : undefined
-            }))
+            createdAt: toTimestamp(planData.createdAt) || Timestamp.now(),
+            updatedAt: toTimestamp(planData.updatedAt) || Timestamp.now(),
+            lastWorkoutDate: toTimestamp(planData.lastWorkoutDate),
+            days: (planData.days || []).map((day: any) => {
+              console.log('Mapping day:', {
+                dayId: day.id,
+                dayName: day.name,
+                exerciseCount: day.exercises?.length
+              });
+              
+              return {
+                id: day.id || crypto.randomUUID(),
+                name: day.name || day.dayName || 'Untitled Day',
+                exercises: (day.exercises || []).map((exercise: any) => {
+                  console.log('Mapping exercise:', {
+                    exerciseId: exercise.id,
+                    name: exercise.name,
+                    weight: exercise.weight,
+                    actualWeight: exercise.actualWeight,
+                    hasHistory: exercise.weightHistory?.length > 0
+                  });
+                  
+                  return {
+                    id: exercise.id || crypto.randomUUID(),
+                    name: exercise.name || '',
+                    sets: exercise.sets || 0,
+                    reps: exercise.reps || 0,
+                    weight: exercise.weight || 0,
+                    actualWeight: exercise.actualWeight,
+                    actualReps: exercise.actualReps,
+                    notes: exercise.notes || '',
+                    restTime: exercise.restTime || 60,
+                    lastCompleted: toTimestamp(exercise.lastCompleted),
+                    weightHistory: exercise.weightHistory?.map((history: any) => ({
+                      weight: history.weight,
+                      timestamp: toTimestamp(history.timestamp) || Timestamp.now(),
+                      notes: history.notes
+                    })) || [],
+                    performance: exercise.performance?.map((perf: any) => ({
+                      setNumber: perf.setNumber || 1,
+                      weight: perf.weight,
+                      reps: perf.reps,
+                      completed: perf.completed || false,
+                      notes: perf.notes,
+                      timestamp: new Date(perf.timestamp)
+                    }))
+                  };
+                }),
+                notes: day.notes || '',
+                lastCompleted: toTimestamp(day.lastCompleted)
+              };
+            })
           };
           
           console.log('Setting workout plan with days:', workoutPlan.days.length); // Debug log

@@ -1,11 +1,24 @@
+import { Timestamp } from 'firebase/firestore';
+
+export interface WeightHistory {
+  weight: number;
+  timestamp: Timestamp;
+  notes?: string;
+}
+
 export interface Exercise {
   id: string;
   name: string;
   sets: number;
   reps: number;
-  weight?: number;
+  weight: number;
   notes?: string;
   restTime?: number; // in seconds
+  // Fields for tracking actual performance
+  actualWeight?: number;
+  actualReps?: number;
+  lastCompleted?: Timestamp;
+  weightHistory?: WeightHistory[];
   performance?: SetPerformance[];
 }
 
@@ -23,19 +36,19 @@ export interface WorkoutDay {
   name: string; // e.g., "Push Day", "Pull Day"
   exercises: Exercise[];
   notes?: string;
-  lastCompleted?: Date;
+  lastCompleted?: Timestamp;
 }
 
 export interface WorkoutPlan {
-  id?: string;
-  traineeId: string;
-  coachId?: string;
-  workoutPlanName: string;
-  name?: string; // For backward compatibility
+  id: string;
+  workoutPlanName?: string;
+  name?: string;
   description?: string;
   days: WorkoutDay[];
-  createdAt: Date | any; // Allow Firestore Timestamp
-  updatedAt?: Date | any; // Allow Firestore Timestamp
   isActive: boolean;
-  lastWorkoutDate?: Date | any; // Allow Firestore Timestamp
+  traineeId: string;
+  coachId: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  lastWorkoutDate?: Timestamp;
 } 
