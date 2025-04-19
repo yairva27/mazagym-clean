@@ -58,29 +58,63 @@ export const useCoachWorkoutPlans = (traineeId: string): UseCoachWorkoutPlansRet
         
         querySnapshot.forEach((doc) => {
           const data = doc.data();
+          console.log('Processing workout plan:', {
+            planId: doc.id,
+            traineeId: data.traineeId,
+            daysCount: data.days?.length
+          });
+          
           plans.push({
             id: doc.id,
             workoutPlanName: data.workoutPlanName,
             description: data.description || '',
-            days: (data.days || []).map((day: any): WorkoutDay => ({
-              id: day.id || uuidv4(),
-              name: day.name,
-              exercises: day.exercises.map((exercise: any): Exercise => ({
-                id: exercise.id || uuidv4(),
-                name: exercise.name,
-                sets: exercise.sets,
-                reps: exercise.reps,
-                weight: exercise.weight,
-                notes: exercise.notes,
-                restTime: exercise.restTime
-              })),
-              notes: day.notes || ''
-            })),
+            days: (data.days || []).map((day: any): WorkoutDay => {
+              console.log('Processing day:', {
+                dayId: day.id,
+                dayName: day.name,
+                exerciseCount: day.exercises?.length
+              });
+              
+              return {
+                id: day.id || uuidv4(),
+                name: day.name,
+                exercises: day.exercises.map((exercise: any): Exercise => {
+                  console.log('Processing exercise:', {
+                    exerciseId: exercise.id,
+                    name: exercise.name,
+                    weight: exercise.weight,
+                    actualWeight: exercise.actualWeight,
+                    hasHistory: exercise.weightHistory?.length > 0
+                  });
+                  
+                  return {
+                    id: exercise.id || uuidv4(),
+                    name: exercise.name,
+                    sets: exercise.sets,
+                    reps: exercise.reps,
+                    weight: exercise.weight,
+                    actualWeight: exercise.actualWeight,
+                    actualReps: exercise.actualReps,
+                    notes: exercise.notes,
+                    restTime: exercise.restTime,
+                    lastCompleted: exercise.lastCompleted,
+                    weightHistory: exercise.weightHistory?.map((history: any) => ({
+                      weight: history.weight,
+                      timestamp: history.timestamp,
+                      notes: history.notes
+                    })) || []
+                  };
+                }),
+                notes: day.notes || '',
+                lastCompleted: day.lastCompleted
+              };
+            }),
             isActive: data.isActive || false,
             traineeId: data.traineeId || '',
             coachId: data.coachId,
             createdAt: data.createdAt,
-            updatedAt: data.updatedAt
+            updatedAt: data.updatedAt,
+            lastWorkoutDate: data.lastWorkoutDate
           });
         });
 

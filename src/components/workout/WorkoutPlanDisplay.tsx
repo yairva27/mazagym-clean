@@ -76,23 +76,27 @@ export const WorkoutPlanDisplay: React.FC<WorkoutPlanDisplayProps> = ({ workoutP
   };
 
   const getDisplayWeight = (exercise: Exercise) => {
-    // For trainees, prefer actual weight if available
+    // Always show actual weight if available, for both trainees and coaches
     const actualWeight = exercise.actualWeight ?? exercise.weight;
+    const hasActualWeight = exercise.actualWeight !== undefined;
+    
     console.log('Getting display weight:', {
       exerciseId: exercise.id,
       exerciseName: exercise.name,
       plannedWeight: exercise.weight,
       actualWeight: exercise.actualWeight,
       displayWeight: actualWeight,
-      isActual: exercise.actualWeight !== undefined
+      hasActualWeight,
+      userRole: userData?.role
     });
 
-    if (isTrainee && exercise.actualWeight !== undefined) {
+    if (hasActualWeight) {
       return {
         weight: actualWeight,
         isActual: true
       };
     }
+    
     // Fallback to planned weight
     return {
       weight: exercise.weight,
@@ -173,15 +177,15 @@ export const WorkoutPlanDisplay: React.FC<WorkoutPlanDisplayProps> = ({ workoutP
                             <div className="text-xs text-gray-500">
                               <span className="font-medium">משקל מתוכנן:</span> {exercise.weight} ק"ג
                             </div>
+                            {exercise.lastCompleted && (
+                              <div className="text-xs text-gray-500">
+                                עודכן: {formatDate(exercise.lastCompleted)}
+                              </div>
+                            )}
                           </>
                         ) : (
                           <div>
                             <span className="font-medium">משקל מתוכנן:</span> {displayWeight.weight} ק"ג
-                          </div>
-                        )}
-                        {exercise.lastCompleted && displayWeight.isActual && (
-                          <div className="text-xs text-gray-500">
-                            עודכן: {formatDate(exercise.lastCompleted)}
                           </div>
                         )}
                       </div>
