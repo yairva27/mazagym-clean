@@ -31,7 +31,7 @@ export const SettingsPage: React.FC = () => {
         phone,
       });
 
-      setMessage({ type: 'success', text: 'Settings updated successfully!' });
+      setMessage({ type: 'success', text: 'ההגדרות נשמרו בהצלחה!' });
     } catch (error) {
       console.error('Error updating settings:', error);
       setMessage({ type: 'error', text: 'Failed to update settings. Please try again.' });
@@ -174,7 +174,7 @@ export const SettingsPage: React.FC = () => {
               disabled={loading}
               className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
-              {loading ? 'Saving...' : 'Save Changes'}
+              {loading ? 'Saving...' : 'שמור שינויים'}
             </button>
           </div>
         </form>

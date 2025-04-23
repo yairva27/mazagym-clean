@@ -4,9 +4,12 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Layout } from '../../components/layout/Layout';
 import { useAuth } from '../../contexts/AuthContext';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, setDoc, Timestamp, updateDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { UserData } from '../../types/user';
+import { useNotification } from '../../contexts/NotificationContext';
+import { WorkoutPlan } from '../../types/workout';
+import { v4 as uuidv4 } from 'uuid';
 
 interface TraineeWithWorkout extends UserData {
   lastWorkoutUpdate?: Date;
@@ -15,9 +18,14 @@ interface TraineeWithWorkout extends UserData {
 
 export const CoachDashboard: React.FC = () => {
   const { userData } = useAuth();
+  const { showNotification, showConfirmation } = useNotification();
   const [trainees, setTrainees] = useState<TraineeWithWorkout[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [duplicating, setDuplicating] = useState(false);
+  const [sourceTraineeId, setSourceTraineeId] = useState<string | null>(null);
+  const [targetTraineeId, setTargetTraineeId] = useState<string | null>(null);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
 
   useEffect(() => {
     const fetchTrainees = async () => {
@@ -123,6 +131,94 @@ export const CoachDashboard: React.FC = () => {
     trainees: trainees
   });
 
+  const handleDuplicateClick = (traineeId: string) => {
+    setSourceTraineeId(traineeId);
+    setShowDuplicateModal(true);
+  };
+
+  const handleDuplicateConfirm = async () => {
+    if (!sourceTraineeId || !targetTraineeId || !userData?.uid) return;
+    
+    setDuplicating(true);
+    try {
+      // Get the active workout plan for the source trainee
+      const workoutPlansRef = collection(db, 'workoutPlans');
+      const q = query(
+        workoutPlansRef,
+        where('traineeId', '==', sourceTraineeId),
+        where('isActive', '==', true)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        showNotification('לא נמצאה תוכנית אימון פעילה למתאמן המקור', 'error');
+        return;
+      }
+      
+      const sourcePlanDoc = querySnapshot.docs[0];
+      const sourcePlanData = sourcePlanDoc.data() as WorkoutPlan;
+      
+      // Create a new workout plan for the target trainee
+      const newPlanRef = doc(collection(db, 'workoutPlans'));
+      const now = Timestamp.now();
+      
+      // Deep clone the plan, resetting completion flags and actual weights
+      const newPlan = {
+        ...sourcePlanData,
+        id: newPlanRef.id,
+        traineeId: targetTraineeId,
+        coachId: userData.uid,
+        createdAt: now,
+        updatedAt: now,
+        isActive: true,
+        days: sourcePlanData.days.map(day => ({
+          ...day,
+          id: uuidv4(),
+          exercises: day.exercises.map(exercise => ({
+            ...exercise,
+            id: uuidv4(),
+            actualWeight: undefined,
+            actualReps: undefined,
+            completed: false,
+            completedAt: null,
+            weightHistory: []
+          }))
+        }))
+      };
+      
+      // Save the new plan to Firestore
+      await setDoc(newPlanRef, newPlan);
+      
+      // Deactivate any existing active plan for the target trainee
+      const existingPlansQuery = query(
+        workoutPlansRef,
+        where('traineeId', '==', targetTraineeId),
+        where('isActive', '==', true)
+      );
+      
+      const existingPlansSnapshot = await getDocs(existingPlansQuery);
+      
+      // Deactivate existing plans
+      const deactivationPromises = existingPlansSnapshot.docs.map(doc => 
+        updateDoc(doc.ref, { isActive: false })
+      );
+      
+      await Promise.all(deactivationPromises);
+      
+      showNotification('התוכנית שוכפלה בהצלחה', 'success');
+      setShowDuplicateModal(false);
+      
+      // Reload the page to refresh the trainees list
+      window.location.reload();
+    } catch (error) {
+      console.error('Error duplicating workout plan:', error);
+      showNotification('שגיאה בשכפול תוכנית האימון', 'error');
+    } finally {
+      setDuplicating(false);
+    }
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -138,24 +234,12 @@ export const CoachDashboard: React.FC = () => {
 
   return (
     <Layout>
-      <div className="container mx-auto px-4 py-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
-          <h1 className="text-2xl font-bold">לוח בקרה</h1>
-          {userData?.invitationCode && (
-            <div className="bg-white shadow rounded-lg p-4 w-full sm:w-auto">
-              <div className="text-sm">
-                <span className="font-semibold ml-2">קוד הזמנה למתאמנים:</span>
-                <span className="bg-blue-50 px-3 py-1 rounded font-mono text-blue-700">
-                  {userData.invitationCode}
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
-
+      <div className="container mx-auto px-4 py-8">
+        <h1 className="text-2xl font-bold mb-6">לוח בקרה למאמן</h1>
+        
         {error ? (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-            <p className="text-red-700">{error}</p>
+          <div className="bg-red-50 p-4 rounded-lg text-red-700 mb-6">
+            {error}
           </div>
         ) : trainees.length === 0 ? (
           <div className="bg-white shadow rounded-lg p-8 text-center">
@@ -212,6 +296,12 @@ export const CoachDashboard: React.FC = () => {
                     >
                       ערוך תוכנית אימון
                     </Link>
+                    <button
+                      onClick={() => handleDuplicateClick(trainee.uid)}
+                      className="block w-full text-center bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors"
+                    >
+                      שכפל תוכנית
+                    </button>
                   </div>
                 </div>
               </div>
@@ -219,6 +309,54 @@ export const CoachDashboard: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Duplicate Plan Modal */}
+      {showDuplicateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold mb-4">שכפול תוכנית אימון</h3>
+            <p className="mb-4">בחר מתאמן אליו תרצה לשכפל את התוכנית:</p>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                מתאמן יעד
+              </label>
+              <select
+                className="w-full p-2 border rounded"
+                value={targetTraineeId || ''}
+                onChange={(e) => setTargetTraineeId(e.target.value)}
+                disabled={duplicating}
+              >
+                <option value="">בחר מתאמן</option>
+                {trainees
+                  .filter(t => t.uid !== sourceTraineeId)
+                  .map(trainee => (
+                    <option key={trainee.uid} value={trainee.uid}>
+                      {trainee.fullName}
+                    </option>
+                  ))}
+              </select>
+            </div>
+            
+            <div className="flex justify-end space-x-3 space-x-reverse">
+              <button
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+                onClick={() => setShowDuplicateModal(false)}
+                disabled={duplicating}
+              >
+                ביטול
+              </button>
+              <button
+                className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+                onClick={handleDuplicateConfirm}
+                disabled={!targetTraineeId || duplicating}
+              >
+                {duplicating ? 'משכפל...' : 'שכפל'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 };
