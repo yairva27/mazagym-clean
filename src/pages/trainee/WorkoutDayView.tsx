@@ -4,6 +4,7 @@ import { doc, getDoc, updateDoc, Timestamp, collection, query, where, getDocs } 
 import { db } from '../../config/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { WorkoutDay, Exercise, WorkoutPlan, WeightHistory } from '../../types/workout';
+import { WeightHistoryChart } from '../../components/workout/WeightHistoryChart';
 
 interface ExerciseStatus {
   exerciseId: string;
@@ -22,6 +23,8 @@ export const WorkoutDayView: React.FC = () => {
   const [workoutDay, setWorkoutDay] = useState<WorkoutDay | null>(null);
   const [exerciseStatuses, setExerciseStatuses] = useState<ExerciseStatus[]>([]);
   const [workoutPlanId, setWorkoutPlanId] = useState<string | null>(null);
+  const [visibleChartId, setVisibleChartId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     const fetchWorkoutDay = async () => {
@@ -119,8 +122,13 @@ export const WorkoutDayView: React.FC = () => {
     );
   };
 
+  const toggleChartVisibility = (exerciseId: string) => {
+    setVisibleChartId(visibleChartId === exerciseId ? null : exerciseId);
+  };
+
   const handleSave = async () => {
     try {
+      setIsSaving(true);
       if (!dayId || !workoutDay || !userData?.uid || !workoutPlanId) {
         console.error('Missing required data for save:', { dayId, workoutPlanId, userId: userData?.uid });
         setError('חסרים נתונים נדרשים לשמירה');
@@ -137,20 +145,17 @@ export const WorkoutDayView: React.FC = () => {
         }))
       });
 
-      const planRef = doc(db, 'workoutPlans', workoutPlanId);
-      const planDoc = await getDoc(planRef);
+      const workoutPlanRef = doc(db, 'workoutPlans', workoutPlanId);
+      const workoutPlanDoc = await getDoc(workoutPlanRef);
       
-      if (!planDoc.exists()) {
+      if (!workoutPlanDoc.exists()) {
         console.error('Workout plan not found:', workoutPlanId);
         setError('תוכנית האימון לא נמצאה');
         return;
       }
 
-      const planData = planDoc.data() as WorkoutPlan;
-      const now = Timestamp.now();
-
-      // Update the exercises with new values while preserving the original structure
-      const updatedDays = planData.days.map(day => {
+      const workoutPlan = workoutPlanDoc.data() as WorkoutPlan;
+      const updatedDays = workoutPlan.days.map(day => {
         if (day.id === dayId) {
           console.log('Updating day:', {
             dayId: day.id,
@@ -160,7 +165,6 @@ export const WorkoutDayView: React.FC = () => {
 
           return {
             ...day,
-            lastCompleted: now,
             exercises: day.exercises.map(exercise => {
               const status = exerciseStatuses.find(s => s.exerciseId === exercise.id);
               if (!status) {
@@ -168,43 +172,29 @@ export const WorkoutDayView: React.FC = () => {
                 return exercise;
               }
 
-              // Only update if there's a change in weight
-              const newActualWeight = status.actualWeight !== undefined ? status.actualWeight : exercise.weight;
-              const weightChanged = newActualWeight !== exercise.actualWeight;
+              const newWeightHistory = status.actualWeight && status.actualWeight > 0
+                ? [{
+                    weight: status.actualWeight,
+                    timestamp: Timestamp.now(),
+                    notes: status.notes || ''
+                  }, ...(exercise.weightHistory || [])]
+                : exercise.weightHistory || [];
 
-              console.log('Updating exercise:', {
-                exerciseId: exercise.id,
-                exerciseName: exercise.name,
-                originalWeight: exercise.weight,
-                previousActualWeight: exercise.actualWeight,
-                newActualWeight,
-                weightChanged,
-                completed: status.completed
-              });
-
-              // Only create weight history entry if weight actually changed
-              let weightHistory = exercise.weightHistory || [];
-              if (weightChanged) {
-                const historyEntry: WeightHistory = {
-                  weight: newActualWeight,
-                  timestamp: now,
-                  notes: status.notes
-                };
-                weightHistory = [...weightHistory, historyEntry];
-
-                console.log('Adding weight history entry:', historyEntry);
-              }
+              // Check if this is a new personal record
+              const currentPR = exercise.personalRecord || 0;
+              const newPR = status.actualWeight && status.actualWeight > currentPR
+                ? status.actualWeight
+                : currentPR;
 
               const updatedExercise = {
                 ...exercise,
-                actualWeight: newActualWeight,
+                actualWeight: status.actualWeight,
                 actualReps: status.actualReps ?? exercise.reps,
                 notes: status.notes || exercise.notes,
-                lastCompleted: now,
-                weightHistory,
-                // Update completion status
                 completed: status.completed,
-                completedAt: status.completed ? now : null
+                completedAt: status.completed ? Timestamp.now() : null,
+                weightHistory: newWeightHistory,
+                personalRecord: newPR
               };
 
               console.log('Final exercise update:', {
@@ -226,8 +216,7 @@ export const WorkoutDayView: React.FC = () => {
 
       const updateData = {
         days: updatedDays,
-        lastWorkoutDate: now,
-        updatedAt: now
+        updatedAt: Timestamp.now()
       };
 
       console.log('Saving to Firestore:', {
@@ -249,13 +238,15 @@ export const WorkoutDayView: React.FC = () => {
       });
 
       // Update the workout plan with the new data
-      await updateDoc(planRef, updateData);
+      await updateDoc(workoutPlanRef, updateData);
 
       console.log('Successfully saved workout progress');
       navigate(-1); // Go back to previous page
     } catch (err) {
       console.error('Error saving workout progress:', err);
       setError('שגיאה בשמירת ההתקדמות');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -302,20 +293,31 @@ export const WorkoutDayView: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">משקל בפועל</label>
-                  <input
-                    type="number"
-                    value={status.actualWeight || ''}
-                    onChange={(e) => {
-                      const newWeight = e.target.value ? Number(e.target.value) : undefined;
-                      console.log('Updating actual weight:', {
-                        exerciseId: exercise.id,
-                        exerciseName: exercise.name,
-                        newWeight
-                      });
-                      handleExerciseStatusChange(exercise.id, { actualWeight: newWeight });
-                    }}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  />
+                  <div className="flex items-center">
+                    <input
+                      type="number"
+                      value={status.actualWeight || ''}
+                      onChange={(e) => {
+                        const newWeight = e.target.value ? Number(e.target.value) : undefined;
+                        console.log('Updating actual weight:', {
+                          exerciseId: exercise.id,
+                          exerciseName: exercise.name,
+                          newWeight
+                        });
+                        handleExerciseStatusChange(exercise.id, { actualWeight: newWeight });
+                      }}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                    {exercise.weightHistory && exercise.weightHistory.length > 0 && (
+                      <button
+                        onClick={() => toggleChartVisibility(exercise.id)}
+                        className="mr-2 p-2 text-blue-600 hover:text-blue-800"
+                        title="היסטוריה"
+                      >
+                        📈
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">חזרות מתוכננות</label>
@@ -344,6 +346,14 @@ export const WorkoutDayView: React.FC = () => {
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 />
               </div>
+
+              {/* Weight History Chart */}
+              {exercise.weightHistory && (
+                <WeightHistoryChart 
+                  history={exercise.weightHistory} 
+                  isVisible={visibleChartId === exercise.id} 
+                />
+              )}
             </div>
           );
         })}

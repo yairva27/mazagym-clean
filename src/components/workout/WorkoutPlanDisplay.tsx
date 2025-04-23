@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { WorkoutPlan } from '../../types/workout';
 import { ExercisePerformanceTracker } from './ExercisePerformanceTracker';
 import { ExerciseNotes } from './ExerciseNotes';
@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Timestamp } from 'firebase/firestore';
 import { Exercise } from '../../types/workout';
+import { WeightHistoryChart } from './WeightHistoryChart';
 
 interface WorkoutPlanDisplayProps {
   workoutPlan: WorkoutPlan;
@@ -15,6 +16,7 @@ export const WorkoutPlanDisplay: React.FC<WorkoutPlanDisplayProps> = ({ workoutP
   const { userData } = useAuth();
   const navigate = useNavigate();
   const isTrainee = userData?.role === 'trainee';
+  const [visibleChartId, setVisibleChartId] = useState<string | null>(null);
 
   console.log('Rendering WorkoutPlanDisplay:', {
     planId: workoutPlan.id,
@@ -108,6 +110,20 @@ export const WorkoutPlanDisplay: React.FC<WorkoutPlanDisplayProps> = ({ workoutP
     };
   };
 
+  const toggleChartVisibility = (exerciseId: string) => {
+    setVisibleChartId(visibleChartId === exerciseId ? null : exerciseId);
+  };
+
+  const getPersonalRecord = (exercise: Exercise): number | null => {
+    if (!exercise.weightHistory || exercise.weightHistory.length === 0) {
+      return null;
+    }
+    
+    // Find the highest weight in the history
+    const highestWeight = Math.max(...exercise.weightHistory.map(h => h.weight));
+    return highestWeight > 0 ? highestWeight : null;
+  };
+
   return (
     <div className="space-y-6">
       {/* Back Button */}
@@ -162,23 +178,23 @@ export const WorkoutPlanDisplay: React.FC<WorkoutPlanDisplayProps> = ({ workoutP
                 });
 
                 return (
-                  <div key={exercise.id || exerciseIndex} className="bg-gray-50 p-4 rounded">
-                    <div className="flex justify-between items-center">
-                      <h4 className="font-medium">{exercise.name}</h4>
-                      {exercise.completed && (
-                        <div className="flex items-center text-green-600">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                          </svg>
-                          <span className="text-sm">בוצע</span>
-                          {exercise.completedAt && (
-                            <span className="text-xs text-gray-500 mr-2">
-                              {formatDate(exercise.completedAt)}
-                            </span>
-                          )}
-                        </div>
+                  <div key={exercise.id || exerciseIndex} className="border rounded p-4">
+                    <div className="flex justify-between items-start">
+                      <h4 className="text-lg font-medium">{exercise.name}</h4>
+                      {exercise.weightHistory && exercise.weightHistory.length > 0 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleChartVisibility(exercise.id);
+                          }}
+                          className="text-blue-600 hover:text-blue-800"
+                          title="היסטוריית משקלים"
+                        >
+                          📈
+                        </button>
                       )}
                     </div>
+
                     <div className="mt-2 grid grid-cols-3 gap-4 text-sm text-gray-600">
                       <div>
                         <span className="font-medium">סטים:</span> {exercise.sets}
@@ -193,6 +209,11 @@ export const WorkoutPlanDisplay: React.FC<WorkoutPlanDisplayProps> = ({ workoutP
                               <span className="font-medium">משקל בפועל:</span>{' '}
                               <span className="text-blue-600">{displayWeight.weight} ק"ג</span>
                             </div>
+                            {getPersonalRecord(exercise) && (
+                              <div className="text-xs text-green-600">
+                                💪 שיא אישי: {getPersonalRecord(exercise)} ק"ג
+                              </div>
+                            )}
                             <div className="text-xs text-gray-500">
                               <span className="font-medium">משקל מתוכנן:</span> {exercise.weight} ק"ג
                             </div>
@@ -229,6 +250,13 @@ export const WorkoutPlanDisplay: React.FC<WorkoutPlanDisplayProps> = ({ workoutP
                           ))}
                         </div>
                       </div>
+                    )}
+                    {/* Weight History Chart */}
+                    {exercise.weightHistory && (
+                      <WeightHistoryChart 
+                        history={exercise.weightHistory} 
+                        isVisible={visibleChartId === exercise.id} 
+                      />
                     )}
                   </div>
                 );

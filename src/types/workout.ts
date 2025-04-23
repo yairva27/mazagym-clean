@@ -23,6 +23,8 @@ export interface Exercise {
   // Fields for tracking completion status
   completed?: boolean;
   completedAt?: Timestamp | null;
+  // Personal record tracking
+  personalRecord?: number;
 }
 
 export interface SetPerformance {
