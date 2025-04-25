@@ -10,7 +10,7 @@ export interface Exercise {
   id: string;
   name: string;
   sets: number;
-  reps: number;
+  reps: number | string;  // Allow both number and string for ranges like "8-10"
   weight: number;
   notes?: string;
   restTime?: number; // in seconds

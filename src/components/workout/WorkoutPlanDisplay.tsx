@@ -126,17 +126,6 @@ export const WorkoutPlanDisplay: React.FC<WorkoutPlanDisplayProps> = ({ workoutP
 
   return (
     <div className="space-y-6">
-      {/* Back Button */}
-      <div className="mb-4">
-        <button
-          onClick={() => navigate(-1)}
-          className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded inline-flex items-center"
-        >
-          <span className="mr-2">←</span>
-          חזור
-        </button>
-      </div>
-
       {/* Plan Header */}
       <div className="bg-white shadow rounded-lg p-6">
         <h2 className="text-2xl font-bold text-gray-900">{workoutPlan.workoutPlanName || workoutPlan.name || 'תוכנית ללא שם'}</h2>

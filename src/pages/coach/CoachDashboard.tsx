@@ -249,11 +249,13 @@ export const CoachDashboard: React.FC = () => {
                 שתף את קוד ההזמנה שלך כדי שמתאמנים יוכלו להירשם למערכת
               </p>
               {userData?.invitationCode && (
-                <div className="bg-blue-50 p-4 rounded-lg inline-block">
+                <div className="bg-blue-50 p-6 rounded-lg border-2 border-blue-200 shadow-md inline-block">
                   <p className="text-sm text-gray-600 mb-2">הקוד שלך:</p>
-                  <span className="font-mono text-lg text-blue-700 font-semibold">
-                    {userData.invitationCode}
-                  </span>
+                  <div className="bg-white p-3 rounded border border-blue-300 shadow-inner">
+                    <span className="font-mono text-2xl text-blue-700 font-bold tracking-wider">
+                      {userData.invitationCode}
+                    </span>
+                  </div>
                 </div>
               )}
             </div>

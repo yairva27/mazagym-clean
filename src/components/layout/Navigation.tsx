@@ -30,7 +30,7 @@ export const Navigation: React.FC = () => {
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
               <Link
                 to={userData.role === 'coach' ? '/coach/dashboard' : '/trainee/dashboard'}
-                className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                className="border-blue-500 text-blue-600 hover:border-blue-700 hover:text-blue-800 inline-flex items-center px-3 pt-1 border-b-2 text-base font-medium shadow-sm"
               >
                 לוח בקרה
               </Link>

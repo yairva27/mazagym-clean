@@ -136,6 +136,25 @@ export const useCoachWorkoutPlans = (traineeId: string): UseCoachWorkoutPlansRet
   const createWorkoutPlan = async (plan: Omit<WorkoutPlan, 'id' | 'createdAt' | 'updatedAt'>): Promise<WorkoutPlan> => {
     try {
       setLoading(true);
+      
+      // First, deactivate any existing active plans for this trainee
+      const existingPlansQuery = query(
+        collection(db, 'workoutPlans'),
+        where('traineeId', '==', plan.traineeId),
+        where('isActive', '==', true)
+      );
+      
+      const existingPlansSnapshot = await getDocs(existingPlansQuery);
+      
+      // Deactivate all existing active plans instead of deleting them
+      const deactivatePromises = existingPlansSnapshot.docs.map(doc => 
+        updateDoc(doc.ref, { isActive: false })
+      );
+      
+      await Promise.all(deactivatePromises);
+      console.log(`Deactivated ${existingPlansSnapshot.size} existing active plan(s) for trainee ${plan.traineeId}`);
+
+      // Create the new plan
       const newPlanRef = doc(collection(db, 'workoutPlans'));
       const now = Timestamp.now();
       
@@ -143,13 +162,20 @@ export const useCoachWorkoutPlans = (traineeId: string): UseCoachWorkoutPlansRet
         ...plan,
         id: newPlanRef.id,
         createdAt: now,
-        updatedAt: now
+        updatedAt: now,
+        isActive: true // Ensure the new plan is active
       };
 
       await setDoc(newPlanRef, {
         ...newPlan,
         createdAt: now,
         updatedAt: now
+      });
+
+      console.log('Created new workout plan:', {
+        planId: newPlanRef.id,
+        traineeId: plan.traineeId,
+        name: plan.workoutPlanName || plan.name
       });
 
       setWorkoutPlans(prev => [newPlan, ...prev]);

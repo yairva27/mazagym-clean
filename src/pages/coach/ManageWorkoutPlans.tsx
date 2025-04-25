@@ -255,7 +255,7 @@ const ManageWorkoutPlans: React.FC<ManageWorkoutPlansProps> = ({ traineeId }) =>
                               weight: parseInt(e.target.value) || 0,
                             })
                           }
-                          placeholder="Weight (kg)"
+                          placeholder='משקל (ק"ג)'
                           className="p-2 border rounded"
                         />
                         <input
