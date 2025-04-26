@@ -237,6 +237,37 @@ export const CoachDashboard: React.FC = () => {
       <div className="container mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold mb-6">לוח בקרה למאמן</h1>
         
+        {/* Add Invitation Code Display */}
+        {userData?.invitationCode && (
+          <div className="bg-white shadow rounded-lg p-6 mb-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-lg font-medium text-gray-900 mb-2">קוד הזמנה למתאמנים</h2>
+                <p className="text-sm text-gray-500">שתף את הקוד עם המתאמנים שלך כדי שיוכלו להירשם למערכת</p>
+              </div>
+              <div className="flex items-center space-x-4 space-x-reverse">
+                <div className="bg-blue-50 px-4 py-2 rounded-md border border-blue-200">
+                  <span className="font-mono text-lg font-semibold text-blue-700">{userData.invitationCode}</span>
+                </div>
+                <button
+                  onClick={() => {
+                    if (userData?.invitationCode) {
+                      navigator.clipboard.writeText(userData.invitationCode);
+                    }
+                  }}
+                  className="bg-blue-100 p-2 rounded-md hover:bg-blue-200 transition-colors"
+                  title="העתק קוד"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
+                    <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        
         {error ? (
           <div className="bg-red-50 p-4 rounded-lg text-red-700 mb-6">
             {error}

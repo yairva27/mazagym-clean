@@ -18,6 +18,14 @@ export const WorkoutPlanDisplay: React.FC<WorkoutPlanDisplayProps> = ({ workoutP
   const isTrainee = userData?.role === 'trainee';
   const [visibleChartId, setVisibleChartId] = useState<string | null>(null);
 
+  if (!workoutPlan || !workoutPlan.days || workoutPlan.days.length === 0) {
+    return (
+      <div className="bg-white shadow rounded-lg p-8 text-center">
+        <p className="text-xl font-medium text-gray-700 mb-4">לא נמצאה תוכנית אימון פעילה. המתן למאמן שלך להוסיף עבורך תוכנית.</p>
+      </div>
+    );
+  }
+
   console.log('Rendering WorkoutPlanDisplay:', {
     planId: workoutPlan.id,
     daysCount: workoutPlan.days.length,

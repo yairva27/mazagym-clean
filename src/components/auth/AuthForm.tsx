@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { UserRole } from '../../contexts/AuthContext';
@@ -21,8 +21,8 @@ export const AuthForm: React.FC<AuthFormProps> = ({ type, role }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
     setLoading(true);
+    setError('');
 
     try {
       if (type === 'signup') {
@@ -44,28 +44,26 @@ export const AuthForm: React.FC<AuthFormProps> = ({ type, role }) => {
         await login(email, password);
       }
     } catch (err) {
-      let errorMessage = 'אירעה שגיאה';
-      
       if (err instanceof Error) {
-        // Handle specific Firebase auth errors
         if (err.message.includes('auth/invalid-email')) {
-          errorMessage = 'כתובת האימייל אינה תקינה';
+          setError('כתובת האימייל אינה תקינה');
         } else if (err.message.includes('auth/user-disabled')) {
-          errorMessage = 'חשבון זה הושבת. אנא פנה לתמיכה';
-        } else if (err.message.includes('auth/user-not-found')) {
-          errorMessage = 'לא נמצא משתמש עם כתובת אימייל זו';
-        } else if (err.message.includes('auth/wrong-password')) {
-          errorMessage = 'סיסמה שגויה';
+          setError('חשבון זה הושבת. אנא פנה לתמיכה');
+        } else if (err.message.includes('auth/user-not-found') || err.message.includes('auth/wrong-password')) {
+          setError('האימייל או הסיסמה שגויים');
         } else if (err.message.includes('auth/too-many-requests')) {
-          errorMessage = 'יותר מדי ניסיונות התחברות. אנא נסה שוב מאוחר יותר';
+          setError('יותר מדי ניסיונות התחברות. אנא נסה שוב מאוחר יותר');
         } else if (err.message.includes('auth/network-request-failed')) {
-          errorMessage = 'בעיית תקשורת. אנא בדוק את החיבור שלך ונסה שוב';
+          setError('בעיית תקשורת. אנא בדוק את החיבור שלך ונסה שוב');
+        } else if (type === 'signup') {
+          setError(err.message);
         } else {
-          errorMessage = err.message;
+          setError('האימייל או הסיסמה שגויים');
         }
+      } else {
+        setError('האימייל או הסיסמה שגויים');
       }
-      
-      setError(errorMessage);
+    } finally {
       setLoading(false);
     }
   };
@@ -79,102 +77,98 @@ export const AuthForm: React.FC<AuthFormProps> = ({ type, role }) => {
           </h2>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          {error && (
-            <div className="rounded-md bg-red-50 p-4">
-              <div className="text-sm text-red-700">{error}</div>
-            </div>
-          )}
-          
-          {type === 'signup' && (
-            <div>
-              <label htmlFor="fullName" className="sr-only">
-                שם מלא
-              </label>
-              <input
-                id="fullName"
-                name="fullName"
-                type="text"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="שם מלא"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-              />
-            </div>
-          )}
-
-          <div>
-            <label htmlFor="email" className="sr-only">
-              אימייל
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-              placeholder="אימייל"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="sr-only">
-              סיסמה
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete={type === 'login' ? 'current-password' : 'new-password'}
-              required
-              className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-              placeholder="סיסמה"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-
-          {type === 'signup' && (
-            <>
+          <div className="space-y-4">
+            {type === 'signup' && (
               <div>
-                <label htmlFor="confirmPassword" className="sr-only">
-                  אישור סיסמה
+                <label htmlFor="fullName" className="sr-only">
+                  שם מלא
                 </label>
                 <input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type="password"
-                  autoComplete="new-password"
+                  id="fullName"
+                  name="fullName"
+                  type="text"
                   required
-                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                  placeholder="אישור סיסמה"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                  placeholder="שם מלא"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
                 />
               </div>
+            )}
 
-              {role === 'trainee' && (
+            <div>
+              <label htmlFor="email" className="sr-only">
+                אימייל
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                placeholder="אימייל"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="password" className="sr-only">
+                סיסמה
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete={type === 'login' ? 'current-password' : 'new-password'}
+                required
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                placeholder="סיסמה"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+
+            {type === 'signup' && (
+              <>
                 <div>
-                  <label htmlFor="invitationCode" className="sr-only">
-                    קוד הזמנה
+                  <label htmlFor="confirmPassword" className="sr-only">
+                    אישור סיסמה
                   </label>
                   <input
-                    id="invitationCode"
-                    name="invitationCode"
-                    type="text"
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type="password"
+                    autoComplete="new-password"
                     required
-                    className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                    placeholder="קוד הזמנה"
-                    value={invitationCode}
-                    onChange={(e) => setInvitationCode(e.target.value)}
+                    className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                    placeholder="אישור סיסמה"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
                   />
                 </div>
-              )}
-            </>
-          )}
+
+                {role === 'trainee' && (
+                  <div>
+                    <label htmlFor="invitationCode" className="sr-only">
+                      קוד הזמנה
+                    </label>
+                    <input
+                      id="invitationCode"
+                      name="invitationCode"
+                      type="text"
+                      required
+                      className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                      placeholder="קוד הזמנה"
+                      value={invitationCode}
+                      onChange={(e) => setInvitationCode(e.target.value)}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+          </div>
 
           <div className="flex space-x-4 space-x-reverse">
             <button
@@ -202,6 +196,21 @@ export const AuthForm: React.FC<AuthFormProps> = ({ type, role }) => {
               </button>
             )}
           </div>
+
+          {error && (
+            <div className="mt-4 rounded-md bg-red-50 p-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="mr-3">
+                  <p className="text-sm font-medium text-red-800">{error}</p>
+                </div>
+              </div>
+            </div>
+          )}
         </form>
       </div>
     </div>

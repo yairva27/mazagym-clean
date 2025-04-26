@@ -62,10 +62,11 @@ export const ViewTraineeWorkout: React.FC = () => {
             </button>
           </div>
           <div className="text-center text-gray-600 p-8">
-            <p>לא נמצאה תוכנית אימון פעילה למתאמן זה.</p>
+            <p className="mb-4 text-lg">לא נמצאה תוכנית אימון פעילה למתאמן זה.</p>
             <button
               onClick={() => navigate(`/coach/trainee/${traineeId}/create-plan`)}
-              className="mt-4 bg-primary text-white px-6 py-2 rounded hover:bg-primary-dark"
+              style={{ backgroundColor: '#2563eb', color: '#fff', borderRadius: '8px', padding: '8px 16px' }}
+              className="font-semibold shadow hover:bg-blue-700 transition-colors"
             >
               צור תוכנית אימון חדשה
             </button>

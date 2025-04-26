@@ -50,6 +50,7 @@ export const useCoachWorkoutPlans = (traineeId: string): UseCoachWorkoutPlansRet
         const q = query(
           collection(db, 'workoutPlans'),
           where('coachId', '==', userData.uid),
+          where('traineeId', '==', traineeId),
           orderBy('createdAt', 'desc')
         );
 
