@@ -253,7 +253,7 @@ const EditWorkoutPlan: React.FC = () => {
       };
 
       await updateDoc(planRef, updates);
-      navigate(`/coach/trainee/${traineeId}/workout`);
+      navigate('/coach/dashboard');
     } catch (err) {
       console.error('Error updating workout plan:', err);
       setError('שגיאה בעדכון תוכנית האימון');
@@ -278,7 +278,7 @@ const EditWorkoutPlan: React.FC = () => {
         <div className="text-center text-red-500 p-4">{error || 'לא נמצאה תוכנית אימון'}</div>
         <div className="text-center mt-4">
           <button
-            onClick={() => navigate(`/coach/trainee/${traineeId}/workout`)}
+            onClick={() => navigate('/coach/dashboard')}
             className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded inline-flex items-center"
           >
             <span className="mr-2">←</span>
@@ -295,7 +295,7 @@ const EditWorkoutPlan: React.FC = () => {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">עריכת תוכנית אימון</h1>
           <button
-            onClick={() => navigate(`/coach/trainee/${traineeId}/workout`)}
+            onClick={() => navigate('/coach/dashboard')}
             className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded inline-flex items-center"
           >
             <span className="mr-2">←</span>
@@ -448,7 +448,7 @@ const EditWorkoutPlan: React.FC = () => {
 
           <div className="mt-6 flex justify-end space-x-4">
                                 <button
-              onClick={() => navigate(`/coach/trainee/${traineeId}/workout`)}
+              onClick={() => navigate('/coach/dashboard')}
               className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
               disabled={saving}
             >
