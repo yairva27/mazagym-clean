@@ -239,14 +239,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Login function
   const login = async (email: string, password: string) => {
     try {
-      setLoading(true);
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       await fetchUserData(userCredential.user.uid);
     } catch (error) {
       console.error('Error during login:', error);
-      throw error;
-    } finally {
-      setLoading(false);
+      throw error; // Re-throw to be handled by the component
     }
   };
 
