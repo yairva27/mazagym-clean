@@ -67,7 +67,7 @@ const EditWorkoutPlan: React.FC = () => {
               id: exercise.id || crypto.randomUUID(),
               name: exercise.name || '',
               sets: Number(exercise.sets) || 1,
-              reps: Number(exercise.reps) || 1,
+              reps: String(exercise.reps ?? ''),
               weight: Number(exercise.weight) || 0,
               notes: exercise.notes || '',
               restTime: Number(exercise.restTime) || 60
@@ -121,7 +121,7 @@ const EditWorkoutPlan: React.FC = () => {
       id: crypto.randomUUID(),
       name: 'תרגיל חדש',
     sets: 3,
-    reps: 10,
+    reps: '8-10',
     weight: 0,
     notes: '',
       restTime: 60
@@ -242,7 +242,7 @@ const EditWorkoutPlan: React.FC = () => {
             id: exercise.id,
             name: exercise.name.trim(),
             sets: Number(exercise.sets) || 1,
-            reps: Number(exercise.reps) || 1,
+            reps: exercise.reps,
             weight: Number(exercise.weight) || 0,
             notes: exercise.notes?.trim() || '',
             restTime: Number(exercise.restTime) || 60
