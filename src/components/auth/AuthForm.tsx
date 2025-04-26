@@ -44,7 +44,28 @@ export const AuthForm: React.FC<AuthFormProps> = ({ type, role }) => {
         await login(email, password);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'אירעה שגיאה');
+      let errorMessage = 'אירעה שגיאה';
+      
+      if (err instanceof Error) {
+        // Handle specific Firebase auth errors
+        if (err.message.includes('auth/invalid-email')) {
+          errorMessage = 'כתובת האימייל אינה תקינה';
+        } else if (err.message.includes('auth/user-disabled')) {
+          errorMessage = 'חשבון זה הושבת. אנא פנה לתמיכה';
+        } else if (err.message.includes('auth/user-not-found')) {
+          errorMessage = 'לא נמצא משתמש עם כתובת אימייל זו';
+        } else if (err.message.includes('auth/wrong-password')) {
+          errorMessage = 'סיסמה שגויה';
+        } else if (err.message.includes('auth/too-many-requests')) {
+          errorMessage = 'יותר מדי ניסיונות התחברות. אנא נסה שוב מאוחר יותר';
+        } else if (err.message.includes('auth/network-request-failed')) {
+          errorMessage = 'בעיית תקשורת. אנא בדוק את החיבור שלך ונסה שוב';
+        } else {
+          errorMessage = err.message;
+        }
+      }
+      
+      setError(errorMessage);
       setLoading(false);
     }
   };

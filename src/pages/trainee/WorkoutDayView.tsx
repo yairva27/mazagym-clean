@@ -5,6 +5,7 @@ import { db } from '../../config/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { WorkoutDay, Exercise, WorkoutPlan, WeightHistory } from '../../types/workout';
 import { WeightHistoryChart } from '../../components/workout/WeightHistoryChart';
+import { Layout } from '../../components/layout/Layout';
 
 interface ExerciseStatus {
   exerciseId: string;
@@ -51,48 +52,53 @@ export const WorkoutDayView: React.FC = () => {
 
         // Find the specific day in the workout plan
         const day = planData.days.find(d => d.id === dayId);
-        if (!day) {
-          console.error(`Day ${dayId} not found in workout plan ${planDoc.id}. Available days:`, planData.days.map(d => d.id));
-          setError('יום האימון המבוקש לא נמצא בתוכנית');
+        
+        // If the requested day is not found, but there are other days available
+        if (!day && planData.days.length > 0) {
+          console.log('Day not found, redirecting to first available day:', {
+            requestedDayId: dayId,
+            availableDays: planData.days.map(d => d.id),
+            redirectingTo: planData.days[0].id
+          });
+          navigate(`/trainee/workout/${planData.days[0].id}`, { replace: true });
+          return;
+        }
+        
+        // If no days exist at all
+        if (!day && planData.days.length === 0) {
+          console.error('No workout days found in plan:', planDoc.id);
+          setError('לא נמצאו ימי אימון בתוכנית. אנא פנה למאמן ליצירת תוכנית חדשה');
+          setLoading(false);
           return;
         }
 
-        console.log('Found workout day:', {
-          dayId: day.id,
-          dayName: day.name,
-          exercises: day.exercises.map(e => ({
-            id: e.id,
-            name: e.name,
-            plannedWeight: e.weight,
-            actualWeight: e.actualWeight
-          }))
-        });
+        // If the day exists, proceed as normal
+        if (day) {
+          console.log('Found workout day:', {
+            dayId: day.id,
+            dayName: day.name,
+            exercises: day.exercises.map(e => ({
+              id: e.id,
+              name: e.name,
+              plannedWeight: e.weight,
+              actualWeight: e.actualWeight
+            }))
+          });
 
-        setWorkoutDay(day);
-        
-        // Initialize exercise statuses with actual values from the workout plan
-        const initialStatuses = day.exercises.map(exercise => {
-          const status = {
+          setWorkoutDay(day);
+          
+          // Initialize exercise statuses with actual values from the workout plan
+          const initialStatuses = day.exercises.map(exercise => ({
             exerciseId: exercise.id,
             completed: exercise.completed || false,
             actualWeight: exercise.actualWeight ?? exercise.weight,
-            actualReps: exercise.actualReps ?? exercise.reps,
+            actualReps: Number(exercise.actualReps ?? exercise.reps),
             notes: exercise.notes || ''
-          };
+          }));
           
-          console.log('Initializing exercise status:', {
-            exerciseId: exercise.id,
-            exerciseName: exercise.name,
-            plannedWeight: exercise.weight,
-            actualWeight: status.actualWeight,
-            completed: status.completed
-          });
-          
-          return status;
-        });
-        
-        setExerciseStatuses(initialStatuses);
-        setError(null);
+          setExerciseStatuses(initialStatuses);
+          setError(null);
+        }
       } catch (err) {
         console.error('Error fetching workout day:', err);
         setError('שגיאה בטעינת יום האימון');
@@ -102,7 +108,7 @@ export const WorkoutDayView: React.FC = () => {
     };
 
     fetchWorkoutDay();
-  }, [dayId, userData?.uid]);
+  }, [dayId, userData?.uid, navigate]);
 
   const handleExerciseStatusChange = (exerciseId: string, updates: Partial<ExerciseStatus>) => {
     console.log('Updating exercise status:', {
@@ -250,9 +256,31 @@ export const WorkoutDayView: React.FC = () => {
     }
   };
 
-  if (loading) return <div className="p-4">טוען...</div>;
-  if (error) return <div className="p-4 text-red-500">{error}</div>;
-  if (!workoutDay) return <div className="p-4">יום האימון לא נמצא</div>;
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (error || !workoutDay) {
+    return (
+      <Layout>
+        <div className="flex flex-col items-center justify-center h-64">
+          <div className="text-center text-red-500 mb-4">{error || 'לא נמצא יום אימון'}</div>
+          <button
+            onClick={() => navigate('/trainee/dashboard')}
+            className="bg-primary text-white px-4 py-2 rounded hover:bg-primary-dark"
+          >
+            חזור לתוכנית האימון
+          </button>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <div className="container mx-auto p-4">

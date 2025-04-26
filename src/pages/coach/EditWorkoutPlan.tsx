@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Layout } from '../../components/layout/Layout';
 import { useAuth } from '../../contexts/AuthContext';
-import { collection, query, where, getDocs, doc, updateDoc, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, Timestamp, orderBy } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { WorkoutPlan, WorkoutDay, Exercise } from '../../types/workout';
 
@@ -41,7 +41,15 @@ const EditWorkoutPlan: React.FC = () => {
           return;
         }
 
-        const planDoc = querySnapshot.docs[0];
+        // Sort plans by createdAt in memory
+        const docs = querySnapshot.docs;
+        docs.sort((a, b) => {
+          const aTime = a.data().createdAt?.toMillis() || 0;
+          const bTime = b.data().createdAt?.toMillis() || 0;
+          return bTime - aTime; // Descending order - newest first
+        });
+
+        const planDoc = docs[0]; // Get the most recent plan
         const planData = planDoc.data();
         
         // Ensure all required fields are present with proper defaults
@@ -70,7 +78,6 @@ const EditWorkoutPlan: React.FC = () => {
           updatedAt: planData.updatedAt,
           description: planData.description || ''
         });
-
       } catch (err) {
         console.error('Error fetching workout plan:', err);
         setError('שגיאה בטעינת תוכנית האימון');
@@ -152,7 +159,7 @@ const EditWorkoutPlan: React.FC = () => {
   };
 
   const validateWorkoutPlan = (plan: WorkoutPlan): boolean => {
-    if (!plan.workoutPlanName.trim()) {
+    if (!plan.workoutPlanName?.trim()) {
       setError('נדרש שם לתוכנית האימון');
       return false;
     }
@@ -161,6 +168,21 @@ const EditWorkoutPlan: React.FC = () => {
       setError('נדרש לפחות יום אימון אחד');
       return false;
     }
+
+    // Validate reps format
+    const validateReps = (reps: string | number) => {
+      if (typeof reps === 'number') return true;
+      if (typeof reps === 'string') {
+        // Allow pure numbers
+        if (/^\d+$/.test(reps)) return true;
+        // Allow ranges like "8-10"
+        if (/^\d+\s*-\s*\d+$/.test(reps)) {
+          const [min, max] = reps.split('-').map(n => parseInt(n.trim()));
+          return min <= max;
+        }
+      }
+      return false;
+    };
 
     for (const day of plan.days) {
       if (!day.name.trim()) {
@@ -184,8 +206,8 @@ const EditWorkoutPlan: React.FC = () => {
           return false;
         }
 
-        if (exercise.reps < 1) {
-          setError('מספר החזרות חייב להיות גדול מ-0');
+        if (!validateReps(exercise.reps)) {
+          setError('אנא הזן מספר או טווח חזרות תקין (למשל: 8-10)');
           return false;
         }
       }
@@ -361,16 +383,20 @@ const EditWorkoutPlan: React.FC = () => {
                       <div>
                         <label className="block text-sm font-medium text-gray-700">חזרות</label>
                               <input
-                                type="number"
-                          min="1"
-                          value={exercise.reps}
-                          onChange={(e) => {
-                            const updatedDays = [...workoutPlan.days];
-                            updatedDays[dayIndex].exercises[exerciseIndex].reps = parseInt(e.target.value) || 1;
-                            setWorkoutPlan({ ...workoutPlan, days: updatedDays });
-                          }}
-                          className="mt-1 block w-full p-2 border rounded"
-                        />
+                                type="text"
+                                value={exercise.reps}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  // Allow numbers, hyphens, and spaces
+                                  if (/^[\d\s-]*$/.test(value)) {
+                                    const updatedDays = [...workoutPlan.days];
+                                    updatedDays[dayIndex].exercises[exerciseIndex].reps = value;
+                                    setWorkoutPlan({ ...workoutPlan, days: updatedDays });
+                                  }
+                                }}
+                                placeholder="לדוגמה: 8-10 או 12"
+                                className="mt-1 block w-full p-2 border rounded"
+                              />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700">משקל (ק"ג)</label>

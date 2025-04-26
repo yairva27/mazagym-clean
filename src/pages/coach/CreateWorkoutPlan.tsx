@@ -126,7 +126,16 @@ const CreateWorkoutPlan: React.FC = () => {
     // Validate reps format
     const validateReps = (reps: string | number) => {
       if (typeof reps === 'number') return true;
-      return /^\d+$|^\d+\s*-\s*\d+$/.test(String(reps));
+      if (typeof reps === 'string') {
+        // Allow pure numbers
+        if (/^\d+$/.test(reps)) return true;
+        // Allow ranges like "8-10"
+        if (/^\d+\s*-\s*\d+$/.test(reps)) {
+          const [min, max] = reps.split('-').map(n => parseInt(n.trim()));
+          return min <= max;
+        }
+      }
+      return false;
     };
 
     try {
@@ -149,6 +158,16 @@ const CreateWorkoutPlan: React.FC = () => {
       
       if (hasInvalidExercises) {
         setError('נא לוודא שכל ימי האימון מכילים לפחות תרגיל אחד תקין');
+        return;
+      }
+
+      // Validate reps format for all exercises
+      const hasInvalidReps = days.some(day =>
+        day.exercises?.some(exercise => !validateReps(exercise.reps))
+      );
+
+      if (hasInvalidReps) {
+        setError('אנא הזן מספר או טווח חזרות תקין (למשל: 8-10)');
         return;
       }
 
