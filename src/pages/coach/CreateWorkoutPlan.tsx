@@ -7,12 +7,69 @@ import { db } from '../../config/firebase';
 import { WorkoutPlan, WorkoutDay, Exercise } from '../../types/workout';
 import { v4 as uuidv4 } from 'uuid';
 
+// Safe UUID generator that works across all platforms
+function generateUUID() {
+  // First try the standard crypto.randomUUID()
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    try {
+      return crypto.randomUUID();
+    } catch (e) {
+      console.warn('crypto.randomUUID failed, falling back to manual implementation');
+    }
+  }
+  
+  // Fallback implementation
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
 // Validation helpers
 const safeString = (input: any): string => typeof input === 'string' ? input : '';
 const safeNumber = (input: any): number => {
   const num = Number(input);
   return !isNaN(num) ? num : 0;
 };
+
+// Error boundary component
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('Error caught by boundary:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-4 text-center">
+          <h1 className="text-xl font-bold mb-4">שגיאה בטעינת העמוד</h1>
+          <p className="text-red-600 mb-4">{this.state.error?.message}</p>
+          <button
+            onClick={() => window.location.href = '/coach/dashboard'}
+            className="bg-blue-600 text-white px-4 py-2 rounded"
+          >
+            חזור ללוח הבקרה
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 const CreateWorkoutPlan: React.FC = () => {
   const { traineeId } = useParams<{ traineeId: string }>();
@@ -24,12 +81,12 @@ const CreateWorkoutPlan: React.FC = () => {
   const [planDescription, setPlanDescription] = useState('');
   const [days, setDays] = useState<WorkoutDay[]>([]);
   const [currentDay, setCurrentDay] = useState<WorkoutDay>({
-    id: crypto.randomUUID(),
+    id: generateUUID(),
     name: '',
     exercises: []
   });
   const [currentExercise, setCurrentExercise] = useState<Exercise>({
-    id: crypto.randomUUID(),
+    id: generateUUID(),
     name: '',
     sets: 3,
     reps: '10',
@@ -40,39 +97,55 @@ const CreateWorkoutPlan: React.FC = () => {
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [existingPlan, setExistingPlan] = useState<WorkoutPlan | null>(null);
 
+  // Add debug logging for mobile
+  useEffect(() => {
+    console.log('Component mounted. User agent:', navigator.userAgent);
+    console.log('Initial state:', {
+      traineeId,
+      userData: userData?.uid,
+      error,
+      saving
+    });
+  }, []);
+
   useEffect(() => {
     const checkExistingPlan = async () => {
-      if (!traineeId) {
-        const errorMsg = 'לא נמצא מתאמן';
-        setError(errorMsg);
-        alert(errorMsg);
-        navigate('/coach/dashboard');
-        return;
-      }
-
-      if (!userData?.uid) {
-        const errorMsg = 'לא נמצא משתמש מחובר';
-        setError(errorMsg);
-        alert(errorMsg);
-        navigate('/login');
-        return;
-      }
-      
       try {
+        console.log('Checking existing plan for traineeId:', traineeId);
+        
+        if (!traineeId) {
+          throw new Error('לא נמצא מתאמן');
+        }
+
+        if (!userData?.uid) {
+          throw new Error('לא נמצא משתמש מחובר');
+        }
+
         const plansRef = collection(db, 'workoutPlans');
         const q = query(plansRef, where('traineeId', '==', traineeId), where('isActive', '==', true));
+        
+        console.log('Executing Firestore query...');
         const querySnapshot = await getDocs(q);
+        console.log('Query results:', {
+          empty: querySnapshot.empty,
+          size: querySnapshot.size
+        });
         
         if (!querySnapshot.empty) {
           const plan = querySnapshot.docs[0].data() as WorkoutPlan;
           setExistingPlan(plan);
+          console.log('Found existing plan:', plan.id);
         }
       } catch (err) {
-        console.error('Error checking existing plan:', err);
-        const errorMsg = 'שגיאה בבדיקת תוכנית קיימת';
+        console.error('Error in checkExistingPlan:', err);
+        const errorMsg = err instanceof Error ? err.message : 'שגיאה בבדיקת תוכנית קיימת';
         setError(errorMsg);
         alert(errorMsg);
-        navigate('/coach/dashboard');
+        
+        // Use setTimeout to ensure navigation happens after state updates
+        setTimeout(() => {
+          navigate('/coach/dashboard');
+        }, 100);
       }
     };
 
@@ -87,7 +160,7 @@ const CreateWorkoutPlan: React.FC = () => {
 
     setDays([...days, { ...currentDay, exercises: [] }]);
     setCurrentDay({
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       name: '',
       exercises: []
     });
@@ -106,7 +179,7 @@ const CreateWorkoutPlan: React.FC = () => {
           ...day,
           exercises: [...(day.exercises || []), { 
             ...currentExercise, 
-            id: crypto.randomUUID(),
+            id: generateUUID(),
             name: currentExercise.name.trim() 
           }]
         };
@@ -115,7 +188,7 @@ const CreateWorkoutPlan: React.FC = () => {
     }));
 
     setCurrentExercise({
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       name: '',
       sets: 3,
       reps: '10',
@@ -142,76 +215,8 @@ const CreateWorkoutPlan: React.FC = () => {
     }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    try {
-      // Validate reps format
-      const validateReps = (reps: string | number) => {
-        if (typeof reps === 'number') return true;
-        if (typeof reps === 'string') {
-          // Allow pure numbers
-          if (/^\d+$/.test(reps)) return true;
-          // Allow ranges like "8-10"
-          if (/^\d+\s*-\s*\d+$/.test(reps)) {
-            const [min, max] = reps.split('-').map(n => parseInt(n.trim()));
-            return min <= max;
-          }
-        }
-        return false;
-      };
-
-      if (!planName.trim()) {
-        throw new Error('נא להזין שם תוכנית');
-      }
-
-      if (days.length === 0) {
-        throw new Error('נא להוסיף לפחות אימון אחד');
-      }
-
-      // Validate exercises
-      const hasInvalidExercises = days.some(day => 
-        !day.exercises?.some(exercise => 
-          exercise && typeof exercise.name === 'string' && exercise.name.trim() !== ''
-        )
-      );
-      
-      if (hasInvalidExercises) {
-        throw new Error('נא לוודא שכל ימי האימון מכילים לפחות תרגיל אחד תקין');
-      }
-
-      // Validate reps format for all exercises
-      const hasInvalidReps = days.some(day =>
-        day.exercises?.some(exercise => !validateReps(exercise.reps))
-      );
-
-      if (hasInvalidReps) {
-        throw new Error('אנא הזן מספר או טווח חזרות תקין (למשל: 8-10)');
-      }
-
-      if (!userData?.uid) {
-        throw new Error('לא נמצא משתמש מחובר');
-      }
-
-      if (!traineeId) {
-        throw new Error('לא נמצא מתאמן');
-      }
-
-      if (existingPlan) {
-        setShowConfirmation(true);
-        return;
-      }
-
-      await savePlan();
-    } catch (err) {
-      console.error('Error in handleSubmit:', err);
-      const errorMessage = err instanceof Error ? err.message : 'אירעה שגיאה בשמירת תוכנית האימון';
-      setError(errorMessage);
-      alert(errorMessage);
-    }
-  };
-
   const savePlan = async () => {
+    console.log('Starting savePlan...');
     setSaving(true);
     setError(null);
     
@@ -220,13 +225,13 @@ const CreateWorkoutPlan: React.FC = () => {
         throw new Error('חסרים פרטי משתמש');
       }
 
-      // Check if trainee exists
+      console.log('Checking trainee existence...');
       const traineeDoc = await getDoc(doc(db, 'users', traineeId));
       if (!traineeDoc.exists()) {
         throw new Error('לא נמצא מתאמן');
       }
 
-      // Delete existing active plan if exists
+      console.log('Deleting existing active plans...');
       const plansRef = collection(db, 'workoutPlans');
       const q = query(plansRef, where('traineeId', '==', traineeId), where('isActive', '==', true));
       const querySnapshot = await getDocs(q);
@@ -236,7 +241,7 @@ const CreateWorkoutPlan: React.FC = () => {
         batch.update(doc.ref, { isActive: false });
       });
 
-      // Create new plan
+      console.log('Creating new plan...');
       const newPlanRef = doc(collection(db, 'workoutPlans'));
       const newPlan: WorkoutPlan = {
         id: newPlanRef.id,
@@ -257,23 +262,100 @@ const CreateWorkoutPlan: React.FC = () => {
       };
 
       batch.set(newPlanRef, newPlan);
+      
+      console.log('Committing batch...');
       await batch.commit();
 
-      // Update trainee's user document
+      console.log('Updating trainee document...');
       await updateDoc(doc(db, 'users', traineeId), {
         hasActivePlan: true,
         activePlanId: newPlanRef.id
       });
 
-      navigate('/coach/dashboard');
+      console.log('Plan saved successfully, navigating...');
+      // Use setTimeout to ensure state updates complete before navigation
+      setTimeout(() => {
+        navigate('/coach/dashboard');
+      }, 100);
+      
     } catch (err) {
-      console.error('Error saving plan:', err);
+      console.error('Error in savePlan:', err);
       const errorMsg = err instanceof Error ? err.message : 'שגיאה בשמירת התוכנית';
       setError(errorMsg);
       alert(errorMsg);
     } finally {
       setSaving(false);
       setShowConfirmation(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log('Form submitted');
+    
+    try {
+      if (!planName.trim()) {
+        throw new Error('נא להזין שם תוכנית');
+      }
+
+      if (days.length === 0) {
+        throw new Error('נא להוסיף לפחות אימון אחד');
+      }
+
+      // Validate exercises
+      const hasInvalidExercises = days.some(day => 
+        !day.exercises?.some(exercise => 
+          exercise && typeof exercise.name === 'string' && exercise.name.trim() !== ''
+        )
+      );
+      
+      if (hasInvalidExercises) {
+        throw new Error('נא לוודא שכל ימי האימון מכילים לפחות תרגיל אחד תקין');
+      }
+
+      // Validate reps format
+      const validateReps = (reps: string | number) => {
+        if (typeof reps === 'number') return true;
+        if (typeof reps === 'string') {
+          if (/^\d+$/.test(reps)) return true;
+          if (/^\d+\s*-\s*\d+$/.test(reps)) {
+            const [min, max] = reps.split('-').map(n => parseInt(n.trim()));
+            return min <= max;
+          }
+        }
+        return false;
+      };
+
+      const hasInvalidReps = days.some(day =>
+        day.exercises?.some(exercise => !validateReps(exercise.reps))
+      );
+
+      if (hasInvalidReps) {
+        throw new Error('אנא הזן מספר או טווח חזרות תקין (למשל: 8-10)');
+      }
+
+      if (!userData?.uid) {
+        throw new Error('לא נמצא משתמש מחובר');
+      }
+
+      if (!traineeId) {
+        throw new Error('לא נמצא מתאמן');
+      }
+
+      console.log('Validation passed, checking for existing plan...');
+      if (existingPlan) {
+        setShowConfirmation(true);
+        return;
+      }
+
+      console.log('No existing plan, proceeding to save...');
+      await savePlan();
+      
+    } catch (err) {
+      console.error('Error in handleSubmit:', err);
+      const errorMessage = err instanceof Error ? err.message : 'אירעה שגיאה בשמירת תוכנית האימון';
+      setError(errorMessage);
+      alert(errorMessage);
     }
   };
 
@@ -515,4 +597,12 @@ const CreateWorkoutPlan: React.FC = () => {
   );
 };
 
-export default CreateWorkoutPlan; 
+const CreateWorkoutPlanWithErrorBoundary: React.FC = () => {
+  return (
+    <ErrorBoundary>
+      <CreateWorkoutPlan />
+    </ErrorBoundary>
+  );
+};
+
+export default CreateWorkoutPlanWithErrorBoundary; 
