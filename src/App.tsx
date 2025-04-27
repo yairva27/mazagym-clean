@@ -1,13 +1,12 @@
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Suspense } from 'react';
-import { AuthProvider, UserData, useAuth } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { LoginPage } from './pages/auth/LoginPage';
 import { SignupPage } from './pages/auth/SignupPage';
 import { Layout } from './components/layout/Layout';
 import { SettingsPage } from './pages/settings/SettingsPage';
-import Settings from './pages/settings/Settings';
 import AvatarSettings from './pages/settings/AvatarSettings';
 import CoachInfo from './pages/trainee/CoachInfo';
 import { InvitationCodePage } from './pages/coach/InvitationCodePage';
@@ -17,6 +16,7 @@ import CreateWorkoutPlan from './pages/coach/CreateWorkoutPlan';
 import EditWorkoutPlan from './pages/coach/EditWorkoutPlan';
 import { TraineeDashboard } from './pages/trainee/TraineeDashboard';
 import { WorkoutDayView } from './pages/trainee/WorkoutDayView';
+import { SplashScreen } from './components/SplashScreen';
 
 function App() {
   return (
@@ -27,6 +27,7 @@ function App() {
             <Suspense fallback={<div>טוען...</div>}>
               <Routes>
                 {/* Public routes */}
+                <Route path="/" element={<SplashScreen />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/signup" element={<SignupPage />} />
 
@@ -114,16 +115,6 @@ function App() {
                     </ProtectedRoute>
                   }
                 />
-
-                {/* Redirect root to appropriate dashboard based on role */}
-                <Route
-                  path="/"
-                  element={
-                    <ProtectedRoute>
-                      <RootRedirect />
-                    </ProtectedRoute>
-                  }
-                />
               </Routes>
             </Suspense>
           </div>
@@ -132,15 +123,5 @@ function App() {
     </Router>
   );
 }
-
-// Separate component for root redirect to handle userData properly
-const RootRedirect = () => {
-  const { userData } = useAuth();
-  
-  if (userData?.role === 'coach') {
-    return <Navigate to="/coach/dashboard" replace />;
-  }
-  return <Navigate to="/trainee/dashboard" replace />;
-};
 
 export default App; 

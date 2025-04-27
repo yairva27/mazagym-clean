@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Layout } from '../../components/layout/Layout';
-import { useCoachWorkoutPlans } from '../../hooks/useCoachWorkoutPlans';
-import { WorkoutPlan, WorkoutDay, Exercise } from '../../types/workout';
-import { doc, collection, setDoc, Timestamp, query, where, getDocs, getDoc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
 import { useAuth } from '../../contexts/AuthContext';
+import { collection, query, where, getDocs, doc, setDoc, getDoc, Timestamp, writeBatch, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../config/firebase';
+import { WorkoutPlan, WorkoutDay, Exercise } from '../../types/workout';
+import { v4 as uuidv4 } from 'uuid';
 
 // Validation helpers
 const safeString = (input: any): string => typeof input === 'string' ? input : '';
 const safeNumber = (input: any): number => {
   const num = Number(input);
-  return isNaN(num) ? 0 : num;
+  return !isNaN(num) ? num : 0;
 };
 
 const CreateWorkoutPlan: React.FC = () => {
@@ -42,20 +42,42 @@ const CreateWorkoutPlan: React.FC = () => {
 
   useEffect(() => {
     const checkExistingPlan = async () => {
-      if (!traineeId) return;
+      if (!traineeId) {
+        const errorMsg = 'לא נמצא מתאמן';
+        setError(errorMsg);
+        alert(errorMsg);
+        navigate('/coach/dashboard');
+        return;
+      }
+
+      if (!userData?.uid) {
+        const errorMsg = 'לא נמצא משתמש מחובר';
+        setError(errorMsg);
+        alert(errorMsg);
+        navigate('/login');
+        return;
+      }
       
-      const plansRef = collection(db, 'workoutPlans');
-      const q = query(plansRef, where('traineeId', '==', traineeId), where('isActive', '==', true));
-      const querySnapshot = await getDocs(q);
-      
-      if (!querySnapshot.empty) {
-        const plan = querySnapshot.docs[0].data() as WorkoutPlan;
-        setExistingPlan(plan);
+      try {
+        const plansRef = collection(db, 'workoutPlans');
+        const q = query(plansRef, where('traineeId', '==', traineeId), where('isActive', '==', true));
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+          const plan = querySnapshot.docs[0].data() as WorkoutPlan;
+          setExistingPlan(plan);
+        }
+      } catch (err) {
+        console.error('Error checking existing plan:', err);
+        const errorMsg = 'שגיאה בבדיקת תוכנית קיימת';
+        setError(errorMsg);
+        alert(errorMsg);
+        navigate('/coach/dashboard');
       }
     };
 
     checkExistingPlan();
-  }, [traineeId]);
+  }, [traineeId, userData?.uid, navigate]);
 
   const handleAddDay = () => {
     if (!currentDay.name.trim()) {
@@ -123,30 +145,28 @@ const CreateWorkoutPlan: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate reps format
-    const validateReps = (reps: string | number) => {
-      if (typeof reps === 'number') return true;
-      if (typeof reps === 'string') {
-        // Allow pure numbers
-        if (/^\d+$/.test(reps)) return true;
-        // Allow ranges like "8-10"
-        if (/^\d+\s*-\s*\d+$/.test(reps)) {
-          const [min, max] = reps.split('-').map(n => parseInt(n.trim()));
-          return min <= max;
-        }
-      }
-      return false;
-    };
-
     try {
+      // Validate reps format
+      const validateReps = (reps: string | number) => {
+        if (typeof reps === 'number') return true;
+        if (typeof reps === 'string') {
+          // Allow pure numbers
+          if (/^\d+$/.test(reps)) return true;
+          // Allow ranges like "8-10"
+          if (/^\d+\s*-\s*\d+$/.test(reps)) {
+            const [min, max] = reps.split('-').map(n => parseInt(n.trim()));
+            return min <= max;
+          }
+        }
+        return false;
+      };
+
       if (!planName.trim()) {
-        setError('נא להזין שם תוכנית');
-        return;
+        throw new Error('נא להזין שם תוכנית');
       }
 
       if (days.length === 0) {
-        setError('נא להוסיף לפחות אימון אחד');
-        return;
+        throw new Error('נא להוסיף לפחות אימון אחד');
       }
 
       // Validate exercises
@@ -157,8 +177,7 @@ const CreateWorkoutPlan: React.FC = () => {
       );
       
       if (hasInvalidExercises) {
-        setError('נא לוודא שכל ימי האימון מכילים לפחות תרגיל אחד תקין');
-        return;
+        throw new Error('נא לוודא שכל ימי האימון מכילים לפחות תרגיל אחד תקין');
       }
 
       // Validate reps format for all exercises
@@ -167,18 +186,15 @@ const CreateWorkoutPlan: React.FC = () => {
       );
 
       if (hasInvalidReps) {
-        setError('אנא הזן מספר או טווח חזרות תקין (למשל: 8-10)');
-        return;
+        throw new Error('אנא הזן מספר או טווח חזרות תקין (למשל: 8-10)');
       }
 
       if (!userData?.uid) {
-        setError('לא נמצא משתמש מחובר');
-        return;
+        throw new Error('לא נמצא משתמש מחובר');
       }
 
       if (!traineeId) {
-        setError('לא נמצא מתאמן');
-        return;
+        throw new Error('לא נמצא מתאמן');
       }
 
       if (existingPlan) {
@@ -189,107 +205,73 @@ const CreateWorkoutPlan: React.FC = () => {
       await savePlan();
     } catch (err) {
       console.error('Error in handleSubmit:', err);
-      setError('אירעה שגיאה בשמירת תוכנית האימון');
+      const errorMessage = err instanceof Error ? err.message : 'אירעה שגיאה בשמירת תוכנית האימון';
+      setError(errorMessage);
+      alert(errorMessage);
     }
   };
 
   const savePlan = async () => {
     setSaving(true);
     setError(null);
-    let savedPlanId = null;
-
+    
     try {
-      // Clean and validate the days array
-      const validDays = days
-        .filter(day => day && typeof day === 'object')
-        .map(day => ({
-          ...day,
-          exercises: (day.exercises || [])
-            .filter(exercise => 
-              exercise && 
-              typeof exercise === 'object' && 
-              typeof exercise.name === 'string' && 
-              exercise.name.trim() !== ''
-            )
-            .map(exercise => ({
-              id: exercise.id || crypto.randomUUID(),
-              name: exercise.name.trim(),
-              sets: safeNumber(exercise.sets),
-              reps: String(exercise.reps || '0'),
-              weight: safeNumber(exercise.weight),
-              notes: exercise.notes?.trim() || '',
-              restTime: safeNumber(exercise.restTime)
-            }))
-        }))
-        .filter(day => day.exercises.length > 0);
-
-      if (validDays.length === 0) {
-        setError('נא להוסיף לפחות יום אימון אחד עם תרגילים');
-        setSaving(false);
-        setShowConfirmation(false);
-        return;
+      if (!traineeId || !userData?.uid) {
+        throw new Error('חסרים פרטי משתמש');
       }
 
-      // Validate trainee exists
-      if (!traineeId) {
+      // Check if trainee exists
+      const traineeDoc = await getDoc(doc(db, 'users', traineeId));
+      if (!traineeDoc.exists()) {
         throw new Error('לא נמצא מתאמן');
       }
 
-      // If there's an existing plan, deactivate it first
-      if (existingPlan?.id) {
-        const existingPlanRef = doc(db, 'workoutPlans', existingPlan.id);
-        await setDoc(existingPlanRef, { isActive: false }, { merge: true });
-      }
-
-      // Create new plan with validated data
+      // Delete existing active plan if exists
       const plansRef = collection(db, 'workoutPlans');
-      const newPlanRef = doc(plansRef);
+      const q = query(plansRef, where('traineeId', '==', traineeId), where('isActive', '==', true));
+      const querySnapshot = await getDocs(q);
+      
+      const batch = writeBatch(db);
+      querySnapshot.docs.forEach(doc => {
+        batch.update(doc.ref, { isActive: false });
+      });
+
+      // Create new plan
+      const newPlanRef = doc(collection(db, 'workoutPlans'));
       const newPlan: WorkoutPlan = {
         id: newPlanRef.id,
-        workoutPlanName: planName.trim(),
-        name: planName.trim(), // Keep both for backward compatibility
-        description: planDescription.trim(),
-        days: validDays,
-        traineeId: traineeId,
-        coachId: userData?.uid || '',
-        createdAt: Timestamp.fromDate(new Date()),
-        updatedAt: Timestamp.fromDate(new Date()),
-        isActive: true
+        traineeId,
+        coachId: userData.uid,
+        name: planName,
+        description: planDescription || '',
+        days: days.map(day => ({
+          ...day,
+          exercises: day.exercises.map(ex => ({
+            ...ex,
+            id: uuidv4()
+          }))
+        })),
+        isActive: true,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       };
 
-      await setDoc(newPlanRef, newPlan);
-      savedPlanId = newPlanRef.id;
+      batch.set(newPlanRef, newPlan);
+      await batch.commit();
 
-      // Verify the plan was saved before navigating
-      const savedPlanDoc = await getDoc(newPlanRef);
-      if (!savedPlanDoc.exists()) {
-        throw new Error('שגיאה בשמירת תוכנית האימון');
-      }
+      // Update trainee's user document
+      await updateDoc(doc(db, 'users', traineeId), {
+        hasActivePlan: true,
+        activePlanId: newPlanRef.id
+      });
 
-      // Double check trainee still exists
-      const traineeRef = doc(db, 'users', traineeId);
-      const traineeDoc = await getDoc(traineeRef);
-      if (!traineeDoc.exists()) {
-        throw new Error('המתאמן לא נמצא במערכת');
-      }
-
-      // All checks passed, safe to navigate
-      navigate(`/coach/trainee/${traineeId}/workout`);
-    } catch (error) {
-      console.error('Error saving workout plan:', error);
-      
-      // If we saved the plan but navigation failed, provide a manual link
-      if (savedPlanId) {
-        setError(
-          `תוכנית האימון נשמרה בהצלחה, אך הייתה בעיה בניווט. ` +
-          `אנא לחץ כאן כדי לצפות בתוכנית: ` +
-          `<a href="/coach/trainee/${traineeId}/workout" class="text-blue-600 hover:text-blue-800 underline">צפה בתוכנית</a>`
-        );
-      } else {
-        setError(error instanceof Error ? error.message : 'שגיאה בשמירת תוכנית האימון');
-      }
-
-      // Stay on the current page
+      navigate('/coach/dashboard');
+    } catch (err) {
+      console.error('Error saving plan:', err);
+      const errorMsg = err instanceof Error ? err.message : 'שגיאה בשמירת התוכנית';
+      setError(errorMsg);
+      alert(errorMsg);
+    } finally {
       setSaving(false);
       setShowConfirmation(false);
     }
@@ -297,12 +279,12 @@ const CreateWorkoutPlan: React.FC = () => {
 
   return (
     <Layout>
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-6 max-w-3xl">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">יצירת תוכנית אימון חדשה</h1>
+          <h1 className="text-xl md:text-2xl font-bold">יצירת תוכנית אימון חדשה</h1>
           <button
-            onClick={() => navigate(-1)}
-            className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded inline-flex items-center"
+            onClick={() => navigate('/coach/dashboard')}
+            className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded inline-flex items-center transition-colors"
           >
             <span className="mr-2">←</span>
             חזור

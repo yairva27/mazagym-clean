@@ -265,7 +265,7 @@ const EditWorkoutPlan: React.FC = () => {
   if (loading) {
     return (
       <Layout>
-        <div className="flex justify-center items-center h-64">
+        <div className="flex justify-center items-center min-h-[60vh]">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
         </div>
       </Layout>
@@ -275,11 +275,11 @@ const EditWorkoutPlan: React.FC = () => {
   if (error || !workoutPlan) {
     return (
       <Layout>
-        <div className="text-center text-red-500 p-4">{error || 'לא נמצאה תוכנית אימון'}</div>
-        <div className="text-center mt-4">
+        <div className="p-4 flex flex-col items-center justify-center min-h-[60vh]">
+          <div className="text-center text-red-500 mb-4">{error || 'לא נמצאה תוכנית אימון'}</div>
           <button
             onClick={() => navigate('/coach/dashboard')}
-            className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded inline-flex items-center"
+            className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded inline-flex items-center transition-colors"
           >
             <span className="mr-2">←</span>
             חזור
@@ -291,12 +291,12 @@ const EditWorkoutPlan: React.FC = () => {
 
   return (
     <Layout>
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-6 max-w-3xl">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">עריכת תוכנית אימון</h1>
+          <h1 className="text-xl md:text-2xl font-bold">עריכת תוכנית אימון</h1>
           <button
             onClick={() => navigate('/coach/dashboard')}
-            className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded inline-flex items-center"
+            className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded inline-flex items-center transition-colors"
           >
             <span className="mr-2">←</span>
             חזור
@@ -316,13 +316,13 @@ const EditWorkoutPlan: React.FC = () => {
               type="text"
               value={workoutPlan.workoutPlanName}
               onChange={(e) => setWorkoutPlan({ ...workoutPlan, workoutPlanName: e.target.value })}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="הכנס שם לתוכנית האימון"
             />
-        </div>
+          </div>
 
           {workoutPlan.days.map((day, dayIndex) => (
-            <div key={day.id} className="border rounded-lg p-4">
+            <div key={day.id} className="border rounded-lg p-4 space-y-4">
               <div className="flex justify-between items-center mb-4">
                 <input
                   type="text"
@@ -332,44 +332,44 @@ const EditWorkoutPlan: React.FC = () => {
                     updatedDays[dayIndex] = { ...day, name: e.target.value };
                     setWorkoutPlan({ ...workoutPlan, days: updatedDays });
                   }}
-                  className="text-lg font-medium p-2 border rounded"
+                  className="text-lg font-medium p-2 border rounded flex-1 ml-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="שם יום האימון"
                 />
-                  <button
+                <button
                   onClick={() => handleDeleteDay(day.id)}
-                  className="text-red-500 hover:text-red-600"
+                  className="text-red-500 hover:text-red-600 text-sm px-3 py-1 rounded transition-colors"
                 >
                   מחק יום
-                    </button>
+                </button>
               </div>
 
-                <div className="space-y-4">
+              <div className="space-y-4">
                 {day.exercises.map((exercise, exerciseIndex) => (
-                  <div key={exercise.id} className="bg-gray-50 p-4 rounded">
-                    <div className="flex justify-between items-center mb-2">
-                    <input
-                      type="text"
+                  <div key={exercise.id} className="bg-gray-50 p-4 rounded space-y-3">
+                    <div className="flex justify-between items-center gap-2">
+                      <input
+                        type="text"
                         value={exercise.name}
                         onChange={(e) => {
                           const updatedDays = [...workoutPlan.days];
                           updatedDays[dayIndex].exercises[exerciseIndex].name = e.target.value;
                           setWorkoutPlan({ ...workoutPlan, days: updatedDays });
                         }}
-                        className="font-medium p-2 border rounded"
+                        className="font-medium p-2 border rounded flex-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         placeholder="שם התרגיל"
-                    />
-                    <button
+                      />
+                      <button
                         onClick={() => handleDeleteExercise(day.id, exercise.id)}
-                        className="text-red-500 hover:text-red-600"
+                        className="text-red-500 hover:text-red-600 text-sm px-3 py-1 rounded transition-colors"
                       >
                         מחק תרגיל
-                            </button>
-                          </div>
-                    <div className="grid grid-cols-3 gap-4">
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700">סטים</label>
-                              <input
-                                type="number"
+                        <label className="block text-sm font-medium text-gray-700 mb-1">סטים</label>
+                        <input
+                          type="number"
                           min="1"
                           value={exercise.sets}
                           onChange={(e) => {
@@ -377,31 +377,30 @@ const EditWorkoutPlan: React.FC = () => {
                             updatedDays[dayIndex].exercises[exerciseIndex].sets = parseInt(e.target.value) || 1;
                             setWorkoutPlan({ ...workoutPlan, days: updatedDays });
                           }}
-                          className="mt-1 block w-full p-2 border rounded"
+                          className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700">חזרות</label>
-                              <input
-                                type="text"
-                                value={exercise.reps}
-                                onChange={(e) => {
-                                  const value = e.target.value;
-                                  // Allow numbers, hyphens, and spaces
-                                  if (/^[\d\s-]*$/.test(value)) {
-                                    const updatedDays = [...workoutPlan.days];
-                                    updatedDays[dayIndex].exercises[exerciseIndex].reps = value;
-                                    setWorkoutPlan({ ...workoutPlan, days: updatedDays });
-                                  }
-                                }}
-                                placeholder="לדוגמה: 8-10 או 12"
-                                className="mt-1 block w-full p-2 border rounded"
-                              />
+                        <label className="block text-sm font-medium text-gray-700 mb-1">חזרות</label>
+                        <input
+                          type="text"
+                          value={exercise.reps}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (/^[\d\s-]*$/.test(value)) {
+                              const updatedDays = [...workoutPlan.days];
+                              updatedDays[dayIndex].exercises[exerciseIndex].reps = value;
+                              setWorkoutPlan({ ...workoutPlan, days: updatedDays });
+                            }
+                          }}
+                          placeholder="לדוגמה: 8-10 או 12"
+                          className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700">משקל (ק"ג)</label>
-                              <input
-                                type="number"
+                        <label className="block text-sm font-medium text-gray-700 mb-1">משקל (ק"ג)</label>
+                        <input
+                          type="number"
                           min="0"
                           value={exercise.weight}
                           onChange={(e) => {
@@ -409,59 +408,59 @@ const EditWorkoutPlan: React.FC = () => {
                             updatedDays[dayIndex].exercises[exerciseIndex].weight = parseInt(e.target.value) || 0;
                             setWorkoutPlan({ ...workoutPlan, days: updatedDays });
                           }}
-                          className="mt-1 block w-full p-2 border rounded"
+                          className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
                     </div>
-                    <div className="mt-4">
-                      <label className="block text-sm font-medium text-gray-700">הערות</label>
-                              <textarea
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">הערות</label>
+                      <textarea
                         value={exercise.notes || ''}
                         onChange={(e) => {
                           const updatedDays = [...workoutPlan.days];
                           updatedDays[dayIndex].exercises[exerciseIndex].notes = e.target.value;
                           setWorkoutPlan({ ...workoutPlan, days: updatedDays });
                         }}
-                        className="mt-1 block w-full p-2 border rounded"
+                        className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         rows={2}
                         placeholder="הוסף הערות לתרגיל"
-                              />
-                            </div>
+                      />
+                    </div>
                   </div>
                 ))}
-                            <button
+                <button
                   onClick={() => handleAddExercise(day.id)}
-                  className="w-full bg-blue-50 hover:bg-blue-100 text-blue-600 font-semibold py-2 px-4 rounded"
-                            >
-                              הוסף תרגיל
-                            </button>
-                          </div>
+                  className="w-full bg-blue-50 hover:bg-blue-100 text-blue-600 font-semibold py-2 px-4 rounded transition-colors"
+                >
+                  הוסף תרגיל
+                </button>
+              </div>
             </div>
           ))}
 
           <button
             onClick={handleAddDay}
-            className="w-full bg-blue-50 hover:bg-blue-100 text-blue-600 font-semibold py-2 px-4 rounded"
+            className="w-full bg-blue-50 hover:bg-blue-100 text-blue-600 font-semibold py-2 px-4 rounded transition-colors"
           >
             הוסף יום אימון
           </button>
 
-          <div className="mt-6 flex justify-end space-x-4">
-                                <button
+          <div className="mt-8 flex flex-col gap-4">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="w-full px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {saving ? 'שומר...' : 'שמור שינויים'}
+            </button>
+            <button
               onClick={() => navigate('/coach/dashboard')}
-              className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+              className="w-full px-4 py-2 bg-gray-100 text-gray-800 font-semibold rounded-md hover:bg-gray-200 border border-gray-300 transition-colors"
               disabled={saving}
             >
               ביטול
-                                </button>
-                                <button
-              onClick={handleSave}
-              disabled={saving}
-              className="px-4 py-2 bg-blue-600 text-white font-bold rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {saving ? 'שומר...' : 'שמור שינויים'}
-                                </button>
-                              </div>
+            </button>
+          </div>
         </div>
       </div>
     </Layout>
