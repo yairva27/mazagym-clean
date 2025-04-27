@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Layout } from '../../components/layout/Layout';
 import { useAuth } from '../../contexts/AuthContext';
-import { collection, query, where, getDocs, doc, getDoc, setDoc, Timestamp, updateDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, setDoc, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { UserData } from '../../types/user';
 import { useNotification } from '../../contexts/NotificationContext';
@@ -26,100 +26,101 @@ export const CoachDashboard: React.FC = () => {
   const [sourceTraineeId, setSourceTraineeId] = useState<string | null>(null);
   const [targetTraineeId, setTargetTraineeId] = useState<string | null>(null);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+  const fetchTrainees = async () => {
+    try {
+      // Validate auth data
+      console.log('=== Auth Data Validation ===');
+      console.log('Current userData:', {
+        uid: userData?.uid,
+        role: userData?.role,
+        exists: !!userData
+      });
+
+      if (!userData?.uid) {
+        console.error('No userData.uid available');
+        setError('שגיאה בטעינת נתוני משתמש');
+        setLoading(false);
+        return;
+      }
+
+      // Build and execute query
+      console.log('=== Query Execution ===');
+      console.log('Building query with params:', {
+        coachId: userData.uid,
+        role: 'trainee'
+      });
+
+      const usersRef = collection(db, 'users');
+      console.log('Collection reference:', usersRef.path);
+
+      const traineesQuery = query(
+        usersRef,
+        where('coachId', '==', userData.uid),
+        where('role', '==', 'trainee')
+      );
+
+      console.log('Executing query...');
+      const querySnapshot = await getDocs(traineesQuery);
+
+      // Log raw query results
+      console.log('=== Raw Query Results ===');
+      console.log('QuerySnapshot:', {
+        empty: querySnapshot.empty,
+        size: querySnapshot.size,
+        docs: querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          exists: doc.exists(),
+          data: doc.data()
+        }))
+      });
+
+      if (querySnapshot.empty) {
+        console.log('Query returned empty result');
+        setTrainees([]);
+        setLoading(false);
+        return;
+      }
+
+      // Process and validate each trainee document
+      console.log('=== Processing Trainees ===');
+      const processedTrainees = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        console.log('Processing document:', {
+          id: doc.id,
+          rawData: data
+        });
+
+        const trainee = {
+          uid: doc.id,
+          email: data.email || '',
+          fullName: data.fullName || '',
+          role: data.role || 'trainee',
+          coachId: data.coachId || '',
+          phoneNumber: data.phoneNumber || data.phone || '',
+          avatar: data.avatar || '',
+          createdAt: data.createdAt?.toDate() || new Date(),
+          updatedAt: data.updatedAt?.toDate() || new Date()
+        } as TraineeWithWorkout;
+
+        console.log('Processed trainee:', trainee);
+        return trainee;
+      });
+
+      console.log('=== Final State Update ===');
+      console.log('Setting trainees state with:', processedTrainees);
+      setTrainees(processedTrainees);
+
+    } catch (err) {
+      console.error('Error in fetchTrainees:', err);
+      setError('שגיאה בטעינת המתאמנים');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchTrainees = async () => {
-      try {
-        // Validate auth data
-        console.log('=== Auth Data Validation ===');
-        console.log('Current userData:', {
-          uid: userData?.uid,
-          role: userData?.role,
-          exists: !!userData
-        });
-
-        if (!userData?.uid) {
-          console.error('No userData.uid available');
-          setError('שגיאה בטעינת נתוני משתמש');
-          setLoading(false);
-          return;
-        }
-
-        // Build and execute query
-        console.log('=== Query Execution ===');
-        console.log('Building query with params:', {
-          coachId: userData.uid,
-          role: 'trainee'
-        });
-
-        const usersRef = collection(db, 'users');
-        console.log('Collection reference:', usersRef.path);
-
-        const traineesQuery = query(
-          usersRef,
-          where('coachId', '==', userData.uid),
-          where('role', '==', 'trainee')
-        );
-
-        console.log('Executing query...');
-        const querySnapshot = await getDocs(traineesQuery);
-
-        // Log raw query results
-        console.log('=== Raw Query Results ===');
-        console.log('QuerySnapshot:', {
-          empty: querySnapshot.empty,
-          size: querySnapshot.size,
-          docs: querySnapshot.docs.map(doc => ({
-            id: doc.id,
-            exists: doc.exists(),
-            data: doc.data()
-          }))
-        });
-
-        if (querySnapshot.empty) {
-          console.log('Query returned empty result');
-          setTrainees([]);
-          setLoading(false);
-          return;
-        }
-
-        // Process and validate each trainee document
-        console.log('=== Processing Trainees ===');
-        const processedTrainees = querySnapshot.docs.map(doc => {
-          const data = doc.data();
-          console.log('Processing document:', {
-            id: doc.id,
-            rawData: data
-          });
-
-          const trainee = {
-            uid: doc.id,
-            email: data.email || '',
-            fullName: data.fullName || '',
-            role: data.role || 'trainee',
-            coachId: data.coachId || '',
-            phoneNumber: data.phoneNumber || data.phone || '',
-            avatar: data.avatar || '',
-            createdAt: data.createdAt?.toDate() || new Date(),
-            updatedAt: data.updatedAt?.toDate() || new Date()
-          } as TraineeWithWorkout;
-
-          console.log('Processed trainee:', trainee);
-          return trainee;
-        });
-
-        console.log('=== Final State Update ===');
-        console.log('Setting trainees state with:', processedTrainees);
-        setTrainees(processedTrainees);
-
-      } catch (err) {
-        console.error('Error in fetchTrainees:', err);
-        setError('שגיאה בטעינת המתאמנים');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchTrainees();
   }, [userData?.uid]);
 
@@ -136,87 +137,160 @@ export const CoachDashboard: React.FC = () => {
     setShowDuplicateModal(true);
   };
 
-  const handleDuplicateConfirm = async () => {
-    if (!sourceTraineeId || !targetTraineeId || !userData?.uid) return;
-    
-    setDuplicating(true);
+  const duplicateWorkoutPlan = async (sourceTraineeId: string, targetTraineeId: string) => {
+    if (!userData?.uid) {
+      throw new Error('User data not found');
+    }
+
     try {
-      // Get the active workout plan for the source trainee
+      console.log('=== Starting Workout Plan Duplication ===');
+      console.log('Source traineeId:', sourceTraineeId);
+      console.log('Target traineeId:', targetTraineeId);
+
+      // 1. Get the source workout plan
       const workoutPlansRef = collection(db, 'workoutPlans');
-      const q = query(
+      const sourcePlanQuery = query(
         workoutPlansRef,
         where('traineeId', '==', sourceTraineeId),
         where('isActive', '==', true)
       );
-      
-      const querySnapshot = await getDocs(q);
-      
-      if (querySnapshot.empty) {
-        showNotification('לא נמצאה תוכנית אימון פעילה למתאמן המקור', 'error');
-        return;
+      const sourcePlanSnapshot = await getDocs(sourcePlanQuery);
+      if (sourcePlanSnapshot.empty) {
+        throw new Error('לא נמצאה תוכנית אימון פעילה למתאמן המקור');
       }
-      
-      const sourcePlanDoc = querySnapshot.docs[0];
+      const sourcePlanDoc = sourcePlanSnapshot.docs[0];
       const sourcePlanData = sourcePlanDoc.data() as WorkoutPlan;
-      
-      // Create a new workout plan for the target trainee
-      const newPlanRef = doc(collection(db, 'workoutPlans'));
-      const now = Timestamp.now();
-      
-      // Deep clone the plan, resetting completion flags and actual weights
-      const newPlan = {
-        ...sourcePlanData,
-        id: newPlanRef.id,
-        traineeId: targetTraineeId,
-        coachId: userData.uid,
-        createdAt: now,
-        updatedAt: now,
-        isActive: true,
-        days: sourcePlanData.days.map(day => ({
-          ...day,
-          id: uuidv4(),
-          exercises: day.exercises.map(exercise => ({
-            ...exercise,
-            id: uuidv4(),
-            actualWeight: undefined,
-            actualReps: undefined,
-            completed: false,
-            completedAt: null,
-            weightHistory: []
-          }))
-        }))
-      };
-      
-      // Save the new plan to Firestore
-      await setDoc(newPlanRef, newPlan);
-      
-      // Deactivate any existing active plan for the target trainee
+      console.log('Source plan found:', { planId: sourcePlanDoc.id });
+
+      // 2. Delete any existing active plans for the target trainee
       const existingPlansQuery = query(
         workoutPlansRef,
         where('traineeId', '==', targetTraineeId),
         where('isActive', '==', true)
       );
-      
       const existingPlansSnapshot = await getDocs(existingPlansQuery);
-      
-      // Deactivate existing plans
-      const deactivationPromises = existingPlansSnapshot.docs.map(doc => 
-        updateDoc(doc.ref, { isActive: false })
+      const batch = writeBatch(db);
+      existingPlansSnapshot.docs.forEach(doc => {
+        console.log('Deleting existing plan:', doc.id);
+        batch.delete(doc.ref);
+      });
+
+      // 3. Create a new plan for the target trainee
+      const newPlanRef = doc(workoutPlansRef);
+      const now = Timestamp.now();
+      const newPlan: WorkoutPlan = {
+        id: newPlanRef.id,
+        workoutPlanName: sourcePlanData.workoutPlanName || sourcePlanData.name || 'תוכנית אימון',
+        name: sourcePlanData.name || sourcePlanData.workoutPlanName || 'תוכנית אימון',
+        description: sourcePlanData.description || '',
+        traineeId: targetTraineeId,
+        coachId: userData.uid,
+        createdAt: now,
+        updatedAt: now,
+        isActive: true,
+        days: (sourcePlanData.days || []).map(day => ({
+          id: uuidv4(),
+          name: day.name || '',
+          notes: day.notes || '',
+          exercises: (day.exercises || []).map(exercise => ({
+            id: uuidv4(),
+            name: exercise.name || '',
+            sets: Number(exercise.sets) || 1,
+            reps: String(exercise.reps || '0'),
+            weight: Number(exercise.weight) || 0,
+            notes: exercise.notes || '',
+            restTime: Number(exercise.restTime) || 60,
+            completed: false,
+            completedAt: null,
+            actualWeight: 0,
+            actualReps: 0,
+            weightHistory: []
+          }))
+        }))
+      };
+      console.log('Creating new plan:', {
+        planId: newPlanRef.id,
+        traineeId: targetTraineeId,
+        isActive: true
+      });
+      batch.set(newPlanRef, newPlan);
+
+      // 4. Update the trainee's user document
+      const traineeRef = doc(db, 'users', targetTraineeId);
+      const traineeUpdate = {
+        planId: newPlanRef.id,
+        workoutPlanId: newPlanRef.id,
+        updatedAt: now
+      };
+      console.log('Updating trainee document:', traineeUpdate);
+      batch.update(traineeRef, traineeUpdate);
+
+      // 5. Commit all changes atomically
+      await batch.commit();
+      console.log('Batch committed successfully');
+
+      // 6. Verify the new plan was created correctly
+      const verificationQuery = query(
+        workoutPlansRef,
+        where('traineeId', '==', targetTraineeId),
+        where('isActive', '==', true)
       );
-      
-      await Promise.all(deactivationPromises);
-      
-      showNotification('התוכנית שוכפלה בהצלחה', 'success');
-      setShowDuplicateModal(false);
-      
-      // Reload the page to refresh the trainees list
-      window.location.reload();
+      const verificationSnapshot = await getDocs(verificationQuery);
+      if (verificationSnapshot.empty) {
+        console.error('Verification failed: No active plan found for target trainee after duplication');
+        throw new Error('שגיאה באימות תוכנית האימון החדשה');
+      }
+      const verifiedPlan = verificationSnapshot.docs[0].data();
+      console.log('Verification successful:', {
+        planId: verifiedPlan.id,
+        traineeId: verifiedPlan.traineeId,
+        isActive: verifiedPlan.isActive
+      });
+
+      return newPlanRef.id;
+    } catch (error) {
+      console.error('Error in duplicateWorkoutPlan:', error);
+      throw error instanceof Error ? error : new Error('שגיאה בשכפול תוכנית האימון');
+    }
+  };
+
+  const handleDuplicateWorkoutPlan = async () => {
+    if (!sourceTraineeId || !targetTraineeId) {
+      showNotification?.('יש לבחור מתאמן מקור ומתאמן יעד', 'error');
+      return;
+    }
+
+    setDuplicating(true);
+    try {
+      const sourceTrainee = trainees.find(t => t.uid === sourceTraineeId);
+      const targetTrainee = trainees.find(t => t.uid === targetTraineeId);
+
+      if (!sourceTrainee || !targetTrainee) {
+        showNotification?.('לא נמצאו פרטי המתאמנים', 'error');
+        return;
+      }
+
+      const newPlanId = await duplicateWorkoutPlan(sourceTraineeId, targetTraineeId);
+      if (newPlanId) {
+        showNotification?.('תוכנית האימון הועתקה בהצלחה', 'success');
+        setShowDuplicateModal(false);
+        setShowConfirmModal(false);
+        setSourceTraineeId(null);
+        setTargetTraineeId(null);
+        
+        // Force refresh the trainees list to show updated plans
+        await fetchTrainees();
+      }
     } catch (error) {
       console.error('Error duplicating workout plan:', error);
-      showNotification('שגיאה בשכפול תוכנית האימון', 'error');
+      showNotification?.('שגיאה בהעתקת תוכנית האימון', 'error');
     } finally {
       setDuplicating(false);
     }
+  };
+
+  const handleConfirmDuplicate = () => {
+    setShowConfirmModal(true);
   };
 
   if (loading) {
@@ -343,7 +417,7 @@ export const CoachDashboard: React.FC = () => {
         )}
       </div>
 
-      {/* Duplicate Plan Modal */}
+      {/* Duplicate Plan Selection Modal */}
       {showDuplicateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full">
@@ -374,17 +448,50 @@ export const CoachDashboard: React.FC = () => {
             <div className="flex justify-end space-x-3 space-x-reverse">
               <button
                 className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
-                onClick={() => setShowDuplicateModal(false)}
+                onClick={() => {
+                  setShowDuplicateModal(false);
+                  setSourceTraineeId(null);
+                  setTargetTraineeId(null);
+                }}
                 disabled={duplicating}
               >
                 ביטול
               </button>
               <button
                 className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
-                onClick={handleDuplicateConfirm}
+                onClick={handleConfirmDuplicate}
                 disabled={!targetTraineeId || duplicating}
               >
-                {duplicating ? 'משכפל...' : 'שכפל'}
+                המשך
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold mb-4">האם אתה בטוח שברצונך לשכפל את התוכנית?</h3>
+            <p className="mb-6 text-gray-600">
+              פעולה זו תחליף את התוכנית הקיימת של המתאמן הנבחר, אם קיימת.
+            </p>
+            
+            <div className="flex justify-end space-x-3 space-x-reverse">
+              <button
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+                onClick={() => setShowConfirmModal(false)}
+                disabled={duplicating}
+              >
+                ביטול
+              </button>
+              <button
+                className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+                onClick={handleDuplicateWorkoutPlan}
+                disabled={duplicating}
+              >
+                {duplicating ? 'משכפל...' : 'אישור'}
               </button>
             </div>
           </div>
